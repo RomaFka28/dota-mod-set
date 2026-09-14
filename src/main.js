@@ -1733,6 +1733,15 @@ async function closeGameProc(id) {
   const { stdout } = await execFileAsync('tasklist', ['/FO', 'CSV', '/NH'], { timeout: 8000, windowsHide: true });
   const pids = parseTasklistRows(stdout).filter(row => row.image === proc.image).map(row => row.pid);
   if (!pids.length) return true;
+  if (id === 'steam') {
+    try {
+      const { stdout: regOut } = await execFileAsync('reg', ['query', 'HKCU\\Software\\Valve\\Steam', '/v', 'SteamExe'], { timeout: 8000, windowsHide: true });
+      const match = regOut.match(/SteamExe\s+REG_SZ\s+(.+)/);
+      const exe = match && match[1].trim();
+      if (exe && path.basename(exe).toLowerCase() === 'steam.exe' && fss.existsSync(exe))
+        await execFileAsync(exe, ['-shutdown'], { timeout: 12000, windowsHide: true }).catch(() => {});
+    } catch { /* taskkill ниже остаётся резервным способом */ }
+  }
   // Сначала просим процессы закрыться, затем принудительно завершаем только
   // найденные PID с дочерними процессами. Steam может быстро перезапустить
   // steam.exe, поэтому после первой попытки повторно получаем список PID.
