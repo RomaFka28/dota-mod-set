@@ -3,7 +3,7 @@
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dota Mod Set</title><link rel="stylesheet" href="styles.css"></head>
 <body>
   <div class="app-shell">
-    <header class="topbar"><div class="brand"><span class="brand-mark">◈</span><span>DOTA <b>MOD SET</b></span><span class="pill safe">Локальный режим</span></div><div class="top-actions"><button class="text-button" id="workshopButton">⚗ Мастерская</button><button class="icon-button" id="settingsButton" title="Настройки">⚙</button></div><button class="text-button source-button" id="sourceButton">D2PFX ↗</button></header>
+    <header class="topbar"><div class="brand"><span class="brand-mark">◈</span><span>DOTA <b>MOD SET</b></span><span class="pill safe">Локальный режим</span></div><div class="top-actions"><button class="text-button" id="workshopButton">⚗ Мастерская</button><button class="icon-button" id="settingsButton" title="Настройки">⚙</button><span class="top-catalog-status"><span class="dot"></span><span id="catalogMode">D2PFX: онлайн</span></span><button class="text-button" id="refreshCatalog" title="Обновить каталог из сети">↻ Обновить</button><button class="text-button source-button" id="sourceButton">GitHub ↗</button></div></header>
     <main class="layout">
       <aside class="sidebar">
         <div class="sidebar-label">КАТАЛОГ</div>
@@ -11,7 +11,7 @@
         <div class="divider"></div>
         <div class="sidebar-label">ГЕРОИ</div>
         <div id="heroList" class="hero-list"></div>
-        <div class="sidebar-foot"><span class="dot"></span><span id="catalogMode">Загрузка каталога…</span><button class="text-button" id="refreshCatalog" title="Обновить каталог из сети">↻</button></div>
+        <div class="sidebar-foot" aria-hidden="true"></div>
       </aside>
       <section class="catalog">
         <div class="catalog-head"><div><div class="eyebrow">КАТАЛОГ МОДОВ</div><h1 id="catalogTitle">Все моды</h1><p id="catalogDescription">Выберите моды и соберите свой набор для Dota 2.</p></div><button class="soft-button" id="historyButton">История наборов</button></div>
