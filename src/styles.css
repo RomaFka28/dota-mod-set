@@ -210,3 +210,108 @@ input,textarea,select,[contenteditable="true"]{
 *::-webkit-scrollbar-button,*::-webkit-scrollbar-corner{display:none;background:transparent;border:0}
 @media(max-width:1160px){.topbar{padding-left:25px;padding-right:150px}}
 @media(max-width:900px){.topbar{padding-left:25px;padding-right:150px}.brand{left:50%;font-size:12px}.brand .pill{display:none}}
+
+/* Workshop dialog: tighter rhythm and clearer working sections. */
+.ws-dialog{
+  width:min(820px,calc(100vw - 32px));
+  max-height:calc(100vh - 28px);
+  overflow:hidden;
+  background:linear-gradient(145deg,#111d2d,#0e1826);
+}
+.ws-dialog form{
+  max-height:calc(100vh - 28px);
+  overflow:auto;
+  padding:24px 22px 20px;
+}
+.ws-dialog .dialog-header{align-items:center;margin-bottom:2px}
+.ws-dialog .dialog-header h2{font-size:20px;letter-spacing:-.25px}
+.ws-dialog > form > .muted{margin:7px 0 14px;line-height:1.5}
+.ws-dialog .divider{
+  margin:14px 0 18px!important;
+  background:rgba(129,144,165,.22);
+}
+.ws-dialog .field-label{
+  margin:0 0 7px;
+  color:#a9b9cb;
+  font-size:11px;
+  letter-spacing:.15px;
+}
+.ws-status{
+  margin:0 0 14px;
+  padding:11px 13px;
+  line-height:1.5;
+  gap:5px 18px;
+  background:rgba(7,16,27,.72);
+  border-color:rgba(121,169,230,.24);
+}
+.ws-status:empty{display:none}
+.ws-dl-btn{margin:-4px 0 14px}
+.ws-dialog .path-control{
+  margin-bottom:10px!important;
+  min-height:48px;
+  padding-left:13px;
+  background:#0b1523;
+  border-color:#30445d;
+}
+.ws-dialog .path-control input{font-size:13px}
+.ws-dialog .path-control .soft-button{
+  min-width:70px;
+  margin:4px;
+}
+.ws-hints{
+  gap:6px;
+  margin:0 0 14px;
+}
+.ws-hint-chip{
+  padding:5px 10px;
+  background:#142235;
+  border-color:#2d425b;
+  color:#b6c8da;
+  transition:.15s;
+}
+.ws-sel-row{
+  margin:0;
+  padding:10px 0 7px;
+  border-top:1px solid rgba(129,144,165,.16);
+}
+.ws-sort{padding:6px 9px;border-radius:7px;background:#111f31}
+.ws-results{
+  max-height:190px;
+  margin:0 0 16px;
+  background:rgba(7,15,25,.72);
+  border-color:#2d425b;
+}
+.ws-color-row{
+  gap:18px;
+  margin:0;
+  padding-top:14px;
+  border-top:1px solid rgba(129,144,165,.16);
+}
+.ws-color-row>div:first-child{min-width:305px}
+.ws-color-wrap{margin-top:0;gap:11px}
+input[type=color]#wsColor{
+  width:48px;
+  height:38px;
+  border-radius:7px;
+}
+.ws-name-input{
+  box-sizing:border-box;
+  min-height:42px;
+  margin-top:0;
+  background:#0b1523;
+}
+.ws-log{margin:14px 0 0;max-height:140px}
+.ws-dialog .dialog-actions{
+  margin-top:18px;
+  padding-top:14px;
+  border-top:1px solid rgba(129,144,165,.16);
+}
+.ws-dialog #wsBuildBtn{
+  min-width:190px;
+  width:auto;
+}
+@media(max-width:640px){
+  .ws-color-row{display:grid;grid-template-columns:1fr}
+  .ws-color-row>div:first-child{min-width:0}
+  .ws-dialog #wsBuildBtn{width:100%}
+}
