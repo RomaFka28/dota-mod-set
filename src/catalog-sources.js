@@ -18,6 +18,17 @@ function sourceById(id) {
   return CATALOG_SOURCES.find(source => source.id === String(id || '')) || null;
 }
 
+function createAuthorSource(catalogUrl) {
+  const url = validateCatalogUrl(catalogUrl);
+  const parsed = new URL(url);
+  const pathParts = parsed.pathname.split('/').filter(Boolean);
+  const repositoryUrl = parsed.hostname === 'raw.githubusercontent.com' && pathParts.length >= 2
+    ? `https://github.com/${pathParts[0]}/${pathParts[1]}`
+    : url;
+  const id = `author-${Buffer.from(url).toString('base64url').slice(0, 48)}`;
+  return { id, name: repositoryUrl.replace(/^https:\/\/github\.com\//, ''), kind: 'author', repositoryUrl, catalogUrl: url, adapter: 'author-json', enabledByDefault: false };
+}
+
 function validateCatalogUrl(value) {
   let url;
   try { url = new URL(String(value || '')); } catch { throw new Error('Некорректный URL каталога'); }
@@ -56,6 +67,7 @@ module.exports = {
   CATALOG_SOURCES,
   SAFE_CATALOG_HOSTS,
   sourceById,
+  createAuthorSource,
   validateCatalogUrl,
   validateCatalogDocument,
   normalizeAuthorCatalog,

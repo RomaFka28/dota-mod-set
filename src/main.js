@@ -6,7 +6,7 @@ const path = require('node:path');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const { validateArchiveEntries } = require('./archive-safety');
-const { CATALOG_SOURCES } = require('./catalog-sources');
+const { CATALOG_SOURCES, createAuthorSource, normalizeAuthorCatalog, validateCatalogUrl } = require('./catalog-sources');
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_GAME_PATH = 'D:\\SteamLibrary\\steamapps\\common\\dota 2 beta';
@@ -115,7 +115,8 @@ async function settings() {
   await ensureData();
   const saved = await readJson(configPath(), {});
   const gamePath = saved.gamePath || (await detectGamePath()) || DEFAULT_GAME_PATH;
-  return { gamePath, sourceUrl: saved.sourceUrl || SOURCE_ROOT, voiceFolder: saved.voiceFolder || '', autoCloseSteam: saved.autoCloseSteam !== false, gamePathAuto: !saved.gamePath, gamePathValid: isDotaDir(path.resolve(gamePath)) };
+  const catalogUrls = Array.isArray(saved.catalogUrls) ? saved.catalogUrls.filter(url => { try { validateCatalogUrl(url); return true; } catch { return false; } }).slice(0, 10) : [];
+  return { gamePath, sourceUrl: saved.sourceUrl || SOURCE_ROOT, catalogUrls, voiceFolder: saved.voiceFolder || '', autoCloseSteam: saved.autoCloseSteam !== false, gamePathAuto: !saved.gamePath, gamePathValid: isDotaDir(path.resolve(gamePath)) };
 }
 
 const SKIP_SOURCE_CATEGORIES = new Set(['tools', 'guides', 'sites', 'news']);
@@ -306,6 +307,20 @@ async function catalogFromSource() {
   }
   throw new Error('Метаданные D2PFX сейчас недоступны');
 }
+async function catalogsFromAuthorSources(urls) {
+  const result = [];
+  for (const url of urls || []) {
+    try {
+      const source = createAuthorSource(url);
+      const response = await fetch(source.catalogUrl, { signal: AbortSignal.timeout(10000), headers: { Accept: 'application/json' } });
+      if (!response.ok) continue;
+      const document = await response.json();
+      const mods = normalizeAuthorCatalog(document, source, normalizeMod);
+      result.push(...mods);
+    } catch { /* one optional source must not hide the primary catalog */ }
+  }
+  return result;
+}
 async function cachedCatalog() { return readJson(path.join(cachePath(), 'catalog.json'), []); }
 async function getCatalog() {
   // Локальные моды мастерской живут в том же catalog.json — при онлайне
@@ -333,7 +348,16 @@ async function getCatalog() {
     await writeJson(path.join(cachePath(), 'catalog.json'), [...localMods, ...rest]);
   }
   try {
-    const remote = await catalogFromSource();
+    const cfg = await settings();
+    let remote = [];
+    let optionalLoaded = false;
+    try { remote = await catalogFromSource(); } catch (error) {
+      const optional = await catalogsFromAuthorSources(cfg.catalogUrls);
+      if (!optional.length) throw error;
+      remote = optional;
+      optionalLoaded = true;
+    }
+    if (cfg.catalogUrls.length && !optionalLoaded) remote = [...remote, ...await catalogsFromAuthorSources(cfg.catalogUrls)];
     const mods = [...localMods, ...remote].map(migrateCatalogEntry);
     await writeJson(path.join(cachePath(), 'catalog.json'), mods);
     return { mods, mode: 'online', installedModIds: await installedModIds() };
@@ -2200,7 +2224,9 @@ app.whenReady().then(async () => {
   await sweepTempDirs();
   ipcMain.handle('catalog:get', getCatalog);
   ipcMain.handle('settings:get', async () => { const current = await settings(); return { ...current, langFolders: gameLangFolders(current.gamePath), vpkTool: await findVpkTool(current.gamePath) }; });
-  ipcMain.handle('settings:save', async (_, next) => { const current = await settings(); const gamePath = String(next.gamePath || current.gamePath).trim(); const voiceFolder = /^dota_[a-z]+$/i.test(String(next.voiceFolder || '')) ? String(next.voiceFolder) : ''; const autoCloseSteam = next.autoCloseSteam !== false; await writeJson(configPath(), { ...current, gamePath, voiceFolder, autoCloseSteam }); const saved = await settings(); return { ...saved, langFolders: gameLangFolders(saved.gamePath), vpkTool: await findVpkTool(gamePath) }; });
+  ipcMain.handle('settings:save', async (_, next) => { const current = await settings(); const gamePath = String(next.gamePath || current.gamePath).trim(); const voiceFolder = /^dota_[a-z]+$/i.test(String(next.voiceFolder || '')) ? String(next.voiceFolder) : ''; const autoCloseSteam = next.autoCloseSteam !== false; const catalogUrls = Array.isArray(next.catalogUrls) ? next.catalogUrls.slice(0, 10).map(validateCatalogUrl) : current.catalogUrls; await writeJson(configPath(), { ...current, gamePath, voiceFolder, autoCloseSteam, catalogUrls }); const saved = await settings(); return { ...saved, langFolders: gameLangFolders(saved.gamePath), vpkTool: await findVpkTool(gamePath) }; });
+  ipcMain.handle('catalog:add-source', async (_, value) => { const url = validateCatalogUrl(value); const current = await settings(); if (current.catalogUrls.includes(url)) return current; if (current.catalogUrls.length >= 10) throw new Error('Можно добавить не более 10 авторских каталогов'); await writeJson(configPath(), { ...current, catalogUrls: [...current.catalogUrls, url] }); return settings(); });
+  ipcMain.handle('catalog:remove-source', async (_, value) => { const url = validateCatalogUrl(value); const current = await settings(); await writeJson(configPath(), { ...current, catalogUrls: current.catalogUrls.filter(item => item !== url) }); return settings(); });
   ipcMain.handle('mod:download', async (_, mod) => downloadMod(mod));
   ipcMain.handle('mod:cached', async (_, id) => Boolean(await findCachedFile(id)));
   ipcMain.handle('mods:cached-ids', async (_, ids) => findCachedIds(ids));

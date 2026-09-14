@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const {
   CATALOG_SOURCES,
   sourceById,
+  createAuthorSource,
   validateCatalogUrl,
   validateCatalogDocument,
   normalizeAuthorCatalog,
@@ -11,6 +12,8 @@ const {
 
 assert.equal(sourceById('d2pfx').name, 'D2PFX');
 assert.equal(sourceById('missing'), null);
+assert.equal(createAuthorSource('https://raw.githubusercontent.com/example/catalog/main/catalog.json').repositoryUrl, 'https://github.com/example/catalog');
+assert.throws(() => createAuthorSource('https://example.com/catalog.json'));
 assert.equal(validateCatalogUrl('https://raw.githubusercontent.com/example/catalog.json').startsWith('https://'), true);
 assert.throws(() => validateCatalogUrl('http://raw.githubusercontent.com/example/catalog.json'));
 assert.throws(() => validateCatalogUrl('https://example.com/catalog.json'));

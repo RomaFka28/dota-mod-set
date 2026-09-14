@@ -278,7 +278,20 @@ async function openSettings() {
   sel.innerHTML = `<option value="">${escapeHtml(autoLabel)}</option>` + folders.map(f => `<option value="${escapeHtml(f)}" ${state.settings.voiceFolder === f ? 'selected' : ''}>${escapeHtml(voiceLabel(f))}</option>`).join('');
   $('#autoCloseInput').checked = state.settings.autoCloseSteam !== false;
   $('#toolStatus').textContent = state.settings.vpkTool ? `Найден установленный VPK-инструмент: ${state.settings.vpkTool}` : 'VPK-инструмент не найден — для готовых VPK он не нужен.';
+  renderCatalogSources();
   $('#settingsDialog').showModal();
+}
+function renderCatalogSources() {
+  const urls = state.settings.catalogUrls || [];
+  $('#catalogSourceList').innerHTML = urls.length
+    ? urls.map(url => `<div class="catalog-source-row"><span title="${escapeHtml(url)}">${escapeHtml(url)}</span><button type="button" class="clear-button" data-remove-catalog="${escapeHtml(url)}">Удалить</button></div>`).join('')
+    : '<div class="muted">Дополнительные каталоги не добавлены.</div>';
+  document.querySelectorAll('[data-remove-catalog]').forEach(button => {
+    button.onclick = async () => {
+      try { state.settings = await window.mods.removeCatalogSource(button.dataset.removeCatalog); renderCatalogSources(); toast('Каталог удалён'); }
+      catch (error) { toast(error.message, true); }
+    };
+  });
 }
 // Статус пути к игре: найденная автоматически папка помечается, битая —
 // красным с объяснением. Светофор, а не молчаливый дефолт.
@@ -400,5 +413,6 @@ $('#gamePathInput').addEventListener('keydown', e => {
 });
 $('#browseButton').onclick = async () => { const chosen = await window.mods.chooseGameFolder(); if (chosen) $('#gamePathInput').value = chosen; };
 $('#gamePathInput').addEventListener('input', () => { state.settings.gamePathValid = false; syncBrowseButton(); renderGamePathStatus(); });
-$('#saveSettings').onclick = async event => { event.preventDefault(); try { state.settings = await window.mods.saveSettings({ gamePath: $('#gamePathInput').value, voiceFolder: $('#voiceFolderInput').value, autoCloseSteam: $('#autoCloseInput').checked }); $('#settingsDialog').close(); renderGamePathStatus(); if (state.settings.gamePathValid) toast('Настройки сохранены'); else toast('Путь сохранён, но это не похоже на Dota 2 (нет pak01) — установка и поиск работать не будут', true); } catch (error) { toast(error.message, true); } };
+$('#addCatalogSource').onclick = async () => { const input = $('#catalogSourceInput'); const url = input.value.trim(); if (!url) return; try { state.settings = await window.mods.addCatalogSource(url); input.value = ''; renderCatalogSources(); toast('Каталог добавлен'); } catch (error) { toast(error.message, true); } };
+$('#saveSettings').onclick = async event => { event.preventDefault(); try { state.settings = await window.mods.saveSettings({ gamePath: $('#gamePathInput').value, voiceFolder: $('#voiceFolderInput').value, autoCloseSteam: $('#autoCloseInput').checked, catalogUrls: state.settings.catalogUrls || [] }); $('#settingsDialog').close(); renderGamePathStatus(); if (state.settings.gamePathValid) toast('Настройки сохранены'); else toast('Путь сохранён, но это не похоже на Dota 2 (нет pak01) — установка и поиск работать не будут', true); } catch (error) { toast(error.message, true); } };
 boot();
