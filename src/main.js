@@ -1732,12 +1732,21 @@ async function ensureAppsClosed(sendProgress) {
   if (!busy.length) return { steamWasRunning: false };
   const cfg = await settings();
   if (!cfg.autoCloseSteam) throw new Error(`Закройте ${busy.map(p => p.label).join(' и ')} перед операцией — иначе файлы заблокированы (или включите автозакрытие в ⚙ Настройках)`);
+  let steamWasClosed = false;
   for (const p of busy) {
     (sendProgress || (() => {}))(`⏳ Закрываю ${p.label}...`);
-    await closeGameProc(p.id);
-    (sendProgress || (() => {}))(`✅ ${p.label} закрыт`);
+    try {
+      await closeGameProc(p.id);
+      if (p.id === 'steam') steamWasClosed = true;
+      (sendProgress || (() => {}))(`✅ ${p.label} закрыт`);
+    } catch (error) {
+      // Steam itself normally does not lock the overlay VPK files. Do not
+      // block installation when Steam refuses to exit; Dota must still close.
+      if (p.id !== 'steam') throw error;
+      (sendProgress || (() => {}))(`⚠ ${p.label} не закрылся — продолжаю установку`);
+    }
   }
-  return { steamWasRunning: rt.steam };
+  return { steamWasRunning: steamWasClosed };
 }
 // Перезапуск Steam-клиента после операции (Доту пользователь запустит сам).
 // Путь берём из реестра Valve, запасные — стандартные установки.

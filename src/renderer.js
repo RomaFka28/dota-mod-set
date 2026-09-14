@@ -241,27 +241,7 @@ async function apply() {
 }
 function renderResultFiles(manifest) {
   const groups = [...new Map(manifest.files.filter(file => file.modId).map(file => [file.modId, file.modName || file.modId])).entries()];
-  $('#resultFiles').innerHTML = groups.map(([id, name]) =>
-    `<li><span>${escapeHtml(name)}</span>${groups.length > 1 ? `<button type="button" class="remove-result-mod" data-result-set="${escapeHtml(manifest.id)}" data-result-mod="${escapeHtml(id)}">Удалить</button>` : ''}</li>`
-  ).join('');
-  document.querySelectorAll('[data-result-set]').forEach(button => button.onclick = async () => {
-    if (!await confirmStyled(`Удалить «${button.parentElement.querySelector('span').textContent}» из этого набора?`, { title: 'Удалить мод', okText: 'Удалить' })) return;
-    button.disabled = true;
-    try {
-      const result = await window.mods.removeMod({ setId: button.dataset.resultSet, modId: button.dataset.resultMod });
-      state.manifests = state.manifests.map(item => item.id === result.set.id ? result.set : item);
-      renderResultFiles(result.set);
-      $('#resultTitle').textContent = `Набор изменён: ${result.set.files.length} VPK`;
-      $('#resultMessage').textContent = result.wasInstalled
-        ? 'Мод удалён из набора и из игры. Установите обновлённый набор снова.'
-        : 'Мод удалён из набора. Остальные VPK сохранены.';
-      const installBtn = $('#resultInstall');
-      installBtn.disabled = false;
-      installBtn.textContent = 'Установить в игру →';
-      await refreshInstalled();
-      render();
-    } catch (error) { toast(error.message, true); button.disabled = false; }
-  });
+  $('#resultFiles').innerHTML = groups.map(([, name]) => `<li>${escapeHtml(name)}</li>`).join('');
 }
 // Установка применённого набора в папку озвучки игры (кнопка в диалоге результата).
 // Префлайт Steam/Dota — на стороне main, отказ приходит понятной ошибкой.
