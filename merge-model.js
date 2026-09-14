@@ -4,9 +4,19 @@
 // Результат: donor-скелет + graft костей base + оба RenderMeshFile + оба LOD + Attachment/Hitbox из base.
 const fs = require('node:fs');
 const path = require('node:path');
+const args = process.argv.slice(2);
+if (args.includes('--help') || args.includes('-h')) {
+  console.log('Usage: node merge-model.js [--face <working dir>] [--game <Dota game dir>]');
+  console.log('Defaults: FACEFIX_DIR or ./facefix; DOTA_GAME_PATH or ./dota 2 beta.');
+  process.exit(0);
+}
+function option(name, fallback) {
+  const i = args.indexOf(name);
+  return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
+}
 
-const FACE = 'C:/Users/Administrator/AppData/Local/Temp/opencode/facefix';
-const GAME = 'D:/SteamLibrary/steamapps/common/dota 2 beta';
+const FACE = option('--face', process.env.FACEFIX_DIR || path.join(__dirname, 'facefix'));
+const GAME = option('--game', process.env.DOTA_GAME_PATH || path.join(__dirname, 'dota 2 beta'));
 const MERGE = path.join(GAME, 'content', 'dota_addons', 'dota_mod_set_ws', 'models', 'merge');
 
 const donor = fs.readFileSync(path.join(FACE, 'donor'), 'utf8').split('\n');

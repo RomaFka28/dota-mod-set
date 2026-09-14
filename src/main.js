@@ -5,6 +5,7 @@ const fss = require('node:fs');
 const path = require('node:path');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
+const { validateArchiveEntries } = require('./archive-safety');
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_GAME_PATH = 'D:\\SteamLibrary\\steamapps\\common\\dota 2 beta';
@@ -471,6 +472,11 @@ async function listAllFiles(root, limit = 30) {
   await walk(root); return output;
 }
 async function expandArchive(zipFile, dest) {
+  const inspect = `Add-Type -AssemblyName System.IO.Compression.FileSystem; $z=[IO.Compression.ZipFile]::OpenRead(${psQuote(zipFile)}); try { $z.Entries | ForEach-Object { [PSCustomObject]@{name=$_.FullName;size=$_.Length;externalAttributes=$_.ExternalAttributes} } | ConvertTo-Json -Compress } finally { $z.Dispose() }`;
+  const { stdout } = await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', inspect], { windowsHide: true, timeout: 30000, maxBuffer: 2 * 1024 * 1024 });
+  let entries;
+  try { entries = JSON.parse(stdout); } catch { throw new Error('Не удалось проверить содержимое ZIP перед распаковкой'); }
+  validateArchiveEntries(Array.isArray(entries) ? entries : [entries]);
   await fs.mkdir(dest, { recursive: true });
   await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `Expand-Archive -LiteralPath ${psQuote(zipFile)} -DestinationPath ${psQuote(dest)} -Force`], { windowsHide: true, timeout: 120000 });
 }
@@ -583,7 +589,8 @@ async function ensureDefaultFontsBackup(fallbackSourceDir) {
       const src = path.join(fallbackSourceDir, file);
       const dst = path.join(backupDir, file);
       if (!fss.existsSync(dst)) {
-        await fs.copyFile(src, dst).catch(() => {});
+        try { await fs.copyFile(src, dst); }
+        catch (error) { throw new Error(`Не удалось сохранить резервную копию шрифта ${file}: ${error.message}`, { cause: error }); }
       }
     }
   }
@@ -594,13 +601,15 @@ async function installCustomFonts(customDir, gamePath) {
   const targetDir = path.join(gamePath, 'game', 'dota', 'panorama', 'fonts');
   await fs.mkdir(targetDir, { recursive: true });
   // Очищаем папку от стандартных шрифтов (как делает Install.bat мода)
-  for (const f of await fs.readdir(targetDir).catch(() => [])) {
-    await fs.rm(path.join(targetDir, f), { force: true }).catch(() => {});
+  for (const f of await fs.readdir(targetDir)) {
+    try { await fs.rm(path.join(targetDir, f), { force: true }); }
+    catch (error) { throw new Error(`Не удалось удалить старый шрифт ${f}: ${error.message}`, { cause: error }); }
   }
   // Копируем кастомные файлы шрифтов
-  const customFiles = await fs.readdir(customDir).catch(() => []);
+  const customFiles = await fs.readdir(customDir);
   for (const f of customFiles) {
-    await fs.copyFile(path.join(customDir, f), path.join(targetDir, f)).catch(() => {});
+    try { await fs.copyFile(path.join(customDir, f), path.join(targetDir, f)); }
+    catch (error) { throw new Error(`Не удалось установить шрифт ${f}: ${error.message}`, { cause: error }); }
   }
   return customFiles.length;
 }
@@ -609,13 +618,15 @@ async function restoreDefaultFonts(gamePath) {
   const backupDir = fontsBackupPath();
   const targetDir = path.join(gamePath, 'game', 'dota', 'panorama', 'fonts');
   if (!fss.existsSync(backupDir) || !fss.existsSync(targetDir)) return false;
-  const backupFiles = await fs.readdir(backupDir).catch(() => []);
+  const backupFiles = await fs.readdir(backupDir);
   if (!backupFiles.length) return false;
-  for (const f of await fs.readdir(targetDir).catch(() => [])) {
-    await fs.rm(path.join(targetDir, f), { force: true }).catch(() => {});
+  for (const f of await fs.readdir(targetDir)) {
+    try { await fs.rm(path.join(targetDir, f), { force: true }); }
+    catch (error) { throw new Error(`Не удалось очистить шрифты перед восстановлением (${f}): ${error.message}`, { cause: error }); }
   }
   for (const f of backupFiles) {
-    await fs.copyFile(path.join(backupDir, f), path.join(targetDir, f)).catch(() => {});
+    try { await fs.copyFile(path.join(backupDir, f), path.join(targetDir, f)); }
+    catch (error) { throw new Error(`Не удалось восстановить шрифт ${f}: ${error.message}`, { cause: error }); }
   }
   return true;
 }
@@ -667,17 +678,17 @@ async function prepareVpk(mod, temp) {
     const fontStaging = path.join(temp, '__font_assets');
     await fs.mkdir(path.join(fontStaging, 'custom'), { recursive: true });
     for (const f of fontAssets.files) {
-      await fs.copyFile(path.join(fontAssets.customDir, f), path.join(fontStaging, 'custom', f)).catch(() => {});
+      await fs.copyFile(path.join(fontAssets.customDir, f), path.join(fontStaging, 'custom', f));
     }
     if (fontAssets.defaultDir) {
       await fs.mkdir(path.join(fontStaging, 'default'), { recursive: true });
       const defFiles = await fs.readdir(fontAssets.defaultDir).catch(() => []);
       for (const f of defFiles) {
-        await fs.copyFile(path.join(fontAssets.defaultDir, f), path.join(fontStaging, 'default', f)).catch(() => {});
+        await fs.copyFile(path.join(fontAssets.defaultDir, f), path.join(fontStaging, 'default', f));
       }
-      await ensureDefaultFontsBackup(fontAssets.defaultDir).catch(() => {});
+      await ensureDefaultFontsBackup(fontAssets.defaultDir);
     }
-    await writeJson(path.join(fontStaging, 'info.json'), { modId: mod.id, modName: mod.name }).catch(() => {});
+    await writeJson(path.join(fontStaging, 'info.json'), { modId: mod.id, modName: mod.name });
   }
   return vpks;
 }
@@ -759,9 +770,9 @@ async function rollback(setId) {
 
     // Если этот набор сейчас был установлен в игре — снимаем его из игры и восстанавливаем дефолтные шрифты
     if (isInstalled) {
-      await removeInstallRecord(resolvedGame).catch(() => {});
+      await removeInstallRecord(resolvedGame);
     } else if (set.hasFonts) {
-      await restoreDefaultFonts(resolvedGame).catch(() => {});
+      await restoreDefaultFonts(resolvedGame);
     }
 
     // Пофайлово и живуче: одна блокировка (Steam держит файл) больше не
@@ -1060,7 +1071,7 @@ async function clearGameOverlay(gamePath) {
     const gamePathResolved = path.resolve(gamePath || (await settings()).gamePath);
     let removed = await removeInstallRecord(gamePathResolved);
     // Всегда гарантированно восстанавливаем оригинальные шрифты игры
-    await restoreDefaultFonts(gamePathResolved).catch(() => {});
+    await restoreDefaultFonts(gamePathResolved);
     const legacy = path.join(gamePathResolved, 'game', 'dota_mods');
     for (const f of await fs.readdir(legacy).catch(() => []))
       if (/^pak\d+_dir\.vpk$/i.test(f)) { await fs.rm(path.join(legacy, f)).then(() => removed++, () => {}); }
@@ -1494,6 +1505,12 @@ function parseTasklistCsv(stdout) {
   }
   return found;
 }
+function parseTasklistRows(stdout) {
+  return String(stdout || '').split(/\r?\n/).flatMap(line => {
+    const m = line.match(/^"([^"]+)","(\d+)"/);
+    return m ? [{ image: m[1].toLowerCase(), pid: Number(m[2]) }] : [];
+  });
+}
 async function runningGameProcs() {
   if (process.platform !== 'win32') return { dota: false, steam: false, unknown: false };
   try {
@@ -1510,15 +1527,21 @@ async function closeGameProc(id) {
   const proc = PREFLIGHT_PROCS.find(p => p.id === id);
   if (!proc) throw new Error('Неизвестный процесс');
   if (process.platform !== 'win32') throw new Error('Закрытие процессов поддерживается только на Windows');
-  // Сначала вежливо (без /F), даём до 4 с на выход; если висит — /F
-  await execFileAsync('taskkill', ['/IM', proc.image], { timeout: 8000, windowsHide: true }).catch(() => {});
+  const { stdout } = await execFileAsync('tasklist', ['/FO', 'CSV', '/NH'], { timeout: 8000, windowsHide: true });
+  const pids = parseTasklistRows(stdout).filter(row => row.image === proc.image).map(row => row.pid);
+  if (!pids.length) return true;
+  // Закрываем только найденные PID, а не все процессы с таким именем.
+  for (const pid of pids)
+    await execFileAsync('taskkill', ['/PID', String(pid)], { timeout: 8000, windowsHide: true }).catch(() => {});
   for (let i = 0; i < 8; i++) {
     await new Promise(r => setTimeout(r, 500));
     const st = await runningGameProcs();
     if (st.unknown) throw new Error(`${proc.label}: не удалось проверить процессы — закройте вручную через диспетчер задач`);
     if (!st[id]) return true;
   }
-  await execFileAsync('taskkill', ['/F', '/IM', proc.image], { timeout: 8000, windowsHide: true }).catch(() => {});
+  const remaining = await execFileAsync('tasklist', ['/FO', 'CSV', '/NH'], { timeout: 8000, windowsHide: true });
+  for (const pid of parseTasklistRows(remaining).filter(row => row.image === proc.image).map(row => row.pid))
+    await execFileAsync('taskkill', ['/F', '/PID', String(pid)], { timeout: 8000, windowsHide: true }).catch(() => {});
   await new Promise(r => setTimeout(r, 1000));
   const st = await runningGameProcs();
   if (st.unknown || st[id]) throw new Error(`${proc.label} не закрывается — закройте вручную через диспетчер задач`);

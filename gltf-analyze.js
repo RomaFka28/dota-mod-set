@@ -1,6 +1,13 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const dir = 'C:/Users/Administrator/AppData/Local/Temp/opencode/facefix';
+const args = process.argv.slice(2);
+if (args.includes('--help') || args.includes('-h')) {
+  console.log('Usage: node gltf-analyze.js [--dir <directory>]');
+  console.log('Default: FACEFIX_DIR or ./facefix.');
+  process.exit(0);
+}
+const i = args.indexOf('--dir');
+const dir = i >= 0 && args[i + 1] ? args[i + 1] : (process.env.FACEFIX_DIR || path.join(__dirname, 'facefix'));
 // Зона лица из хитбокса Head_0 базовой модели (мировые координаты, грубо)
 const FACE = { x0: 15, x1: 50, y0: -13, y1: 13, z0: 172, z1: 200 };
 for (const f of ['g_donor.gltf', 'g_base.gltf']) {

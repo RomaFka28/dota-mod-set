@@ -1,9 +1,18 @@
 const fs = require('node:fs');
+const path = require('node:path');
+const args = process.argv.slice(2);
+if (args.includes('--help') || args.includes('-h')) {
+  console.log('Usage: node gltf-front.js [--dir <directory>]');
+  console.log('Default: FACEFIX_DIR or ./facefix.');
+  process.exit(0);
+}
+const i = args.indexOf('--dir');
+const dir = i >= 0 && args[i + 1] ? args[i + 1] : (process.env.FACEFIX_DIR || path.join(__dirname, 'facefix'));
 for (const f of ['g_donor.gltf', 'g_base.gltf']) {
-  const g = JSON.parse(fs.readFileSync('C:/Users/Administrator/AppData/Local/Temp/opencode/facefix/' + f, 'utf8'));
+  const g = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
   const acc = g.accessors[g.meshes[0].primitives[0].attributes.POSITION];
   const bv = g.bufferViews[acc.bufferView];
-  const buf = fs.readFileSync('C:/Users/Administrator/AppData/Local/Temp/opencode/facefix/' + g.buffers[bv.buffer].uri);
+  const buf = fs.readFileSync(path.join(dir, g.buffers[bv.buffer].uri));
   const base = (bv.byteOffset || 0) + (acc.byteOffset || 0);
   const stride = bv.byteStride || 12;
   const pts = [];

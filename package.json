@@ -8,8 +8,8 @@
     "start": "electron .",
     "dist": "electron-builder --win portable",
     "dist:setup": "electron-builder --win nsis",
-    "test": "node src/recolor.test.js && node src/preflight.test.js && node src/dedup.test.js && node src/build.test.js && node src/grouping.test.js && node src/helpflags.test.js && node src/wave2.test.js && node src/subslot.test.js",
-    "check": "node --check src/main.js && node --check src/preload.js && node --check src/renderer.js && node --check src/workshop.js && node --check src/recolor.test.js && node --check src/preflight.test.js && node --check src/dedup.test.js && node --check src/build.test.js && node --check src/grouping.test.js && node --check src/helpflags.test.js && node --check src/wave2.test.js && node --check src/subslot.test.js"
+    "test": "node src/recolor.test.js && node src/preflight.test.js && node src/dedup.test.js && node src/build.test.js && node src/grouping.test.js && node src/helpflags.test.js && node src/wave2.test.js && node src/subslot.test.js && node src/archive-safety.test.js",
+    "check": "node --check src/main.js && node --check src/preload.js && node --check src/renderer.js && node --check src/workshop.js && node --check src/archive-safety.js && node --check src/recolor.test.js && node --check src/preflight.test.js && node --check src/dedup.test.js && node --check src/build.test.js && node --check src/grouping.test.js && node --check src/helpflags.test.js && node --check src/wave2.test.js && node --check src/subslot.test.js && node --check src/archive-safety.test.js"
   },
   "devDependencies": {
     "electron": "^44.3.0",
