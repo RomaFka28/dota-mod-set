@@ -30,6 +30,7 @@ const CATEGORIES = [
   ['other', '○', 'Прочее'],
   ['hero-skins', '◉', 'Скины героев (прочие)'],
 ];
+const CATEGORY_NAMES = new Map(CATEGORIES.map(([key, , label]) => [key, label]));
 const state = { mods: [], cart: [], category: 'all', hero: 'all', query: '', availability: 'all', settings: null, manifests: [], activeSetId: null, cached: new Set(), installed: new Set(), catalogMode: 'demo' };
 const $ = selector => document.querySelector(selector);
 const escapeHtml = text => String(text ?? '').replace(/[&<>'"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;' }[c]));
@@ -66,7 +67,7 @@ function playChime(kind = 'ok') {
     });
   } catch { /* без звука — молча */ }
 }
-function categoryName(key) { return CATEGORIES.find(x => x[0] === key)?.[2] || key; }
+function categoryName(key) { return CATEGORY_NAMES.get(key) || key; }
 function conflictMap() { const keys = new Map(); for (const mod of state.cart) for (const key of mod.conflictKeys || []) { const found = keys.get(key) || []; found.push(mod); keys.set(key, found); } return [...keys.entries()].filter(([, mods]) => mods.length > 1); }
 function modStatus(mod) { if (state.cached.has(mod.id)) return 'ready'; return mod.downloadUrl ? 'download' : 'demo'; }
 // Фильтр наличия («Все / Готово / Требуется скачать») — применяется и к сетке,
