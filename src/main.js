@@ -848,6 +848,25 @@ async function extendSet({ setId, mods, gamePath }) {
         await fs.copyFile(item.vpk, destination, fss.constants.COPYFILE_EXCL);
         added.push({ file: destination, sha256: await hashFile(destination), modId: item.mod.id, modName: item.mod.name, slot });
       }
+      // prepareVpk stages font assets separately from the generated VPK.
+      // Preserve them when extending an existing set; otherwise the VPK is
+      // added but installSetToGame has no custom files to copy.
+      const fontStaging = path.join(temp, '__font_assets');
+      if (fss.existsSync(path.join(fontStaging, 'custom'))) {
+        const setFontDir = path.join(path.dirname(manifest.target), 'font-assets');
+        await fs.mkdir(path.join(setFontDir, 'custom'), { recursive: true });
+        for (const file of await fs.readdir(path.join(fontStaging, 'custom'))) {
+          await fs.copyFile(path.join(fontStaging, 'custom', file), path.join(setFontDir, 'custom', file));
+        }
+        if (fss.existsSync(path.join(fontStaging, 'default'))) {
+          await fs.mkdir(path.join(setFontDir, 'default'), { recursive: true });
+          for (const file of await fs.readdir(path.join(fontStaging, 'default'))) {
+            await fs.copyFile(path.join(fontStaging, 'default', file), path.join(setFontDir, 'default', file));
+          }
+        }
+        manifest.hasFonts = true;
+        manifest.fontMod = await readJson(path.join(fontStaging, 'info.json'), null);
+      }
       manifest.files.push(...added);
       manifest.updatedAt = new Date().toISOString();
       await writeJson(manifestPath(), manifests);
