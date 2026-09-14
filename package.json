@@ -12,7 +12,7 @@
     "check": "node --check src/main.js && node --check src/preload.js && node --check src/renderer.js && node --check src/workshop.js && node --check src/recolor.test.js && node --check src/preflight.test.js && node --check src/dedup.test.js && node --check src/build.test.js && node --check src/grouping.test.js && node --check src/helpflags.test.js && node --check src/wave2.test.js && node --check src/subslot.test.js"
   },
   "devDependencies": {
-    "electron": "^37.10.3",
+    "electron": "^44.3.0",
     "electron-builder": "^26.15.3"
   },
   "allowScripts": {
@@ -21,12 +21,25 @@
   "build": {
     "appId": "com.dotamodset.app",
     "productName": "Dota Mod Set",
-    "directories": { "output": "dist" },
-    "files": ["src/**/*", "package.json", "!src/*.test.js"],
-    "win": {
-      "target": ["portable"]
+    "directories": {
+      "output": "dist"
     },
-    "portable": { "artifactName": "DotaModSet-${version}-portable.exe" },
-    "nsis": { "oneClick": false, "perMachine": false }
+    "files": [
+      "src/**/*",
+      "package.json",
+      "!src/*.test.js"
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ]
+    },
+    "portable": {
+      "artifactName": "DotaModSet-${version}-portable.exe"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false
+    }
   }
 }

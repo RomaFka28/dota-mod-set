@@ -21,7 +21,14 @@ const fontsBackupPath = () => path.join(dataPath(), 'fonts-default-backup');
 const ASSET_FONT_EXTS = new Set(['ttf', 'otf', 'uifont', 'vfont', 'ttc', 'woff', 'woff2']);
 
 async function ensureData() { await Promise.all([fs.mkdir(cachePath(), { recursive: true }), fs.mkdir(dataPath(), { recursive: true })]); }
-async function readJson(file, fallback) { try { return JSON.parse(await fs.readFile(file, 'utf8')); } catch { return fallback; } }
+async function readJson(file, fallback) {
+  try {
+    return JSON.parse(await fs.readFile(file, 'utf8'));
+  } catch (error) {
+    if (error && error.code === 'ENOENT') return fallback;
+    throw new Error(`Не удалось прочитать JSON ${path.basename(file)}: ${error.message}`, { cause: error });
+  }
+}
 // Атомарная запись JSON: tmp + rename, чтобы краш не оставлял половинчатые
 // манифесты/каталоги/записи установки (аудит, волна 2).
 async function writeJson(file, value) {
@@ -910,13 +917,8 @@ async function installSetToGameInner(setId) {
   if (!langDirs.length)
     throw new Error('Не найдены языковые папки Доты (dota_russian/...) — проверьте путь к игре в настройках');
 
-  // Снимаем прошлую нашу установку + чистим legacy dota_mods
-  const prevRec = await readJson(installRecordPath(), null);
-  await removeInstallRecord();
-  for (const f of await fs.readdir(path.join(gamePath, 'game', 'dota_mods')).catch(() => []))
-    if (/^pak\d+_dir\.vpk$/i.test(f)) await fs.rm(path.join(gamePath, 'game', 'dota_mods', f)).catch(() => {});
-
-  // Верифицируем исходники один раз (до записи в любую папку)
+  // Проверяем все источники до удаления предыдущей установки: ошибка здесь
+  // не должна оставлять пользователя без рабочего набора.
   for (const f of files) {
     if (!isSubpath(f.file, set.target) || !fss.existsSync(f.file))
       throw new Error(`Файл набора пропал: ${path.basename(f.file)}`);
@@ -924,31 +926,42 @@ async function installSetToGameInner(setId) {
       throw new Error(`Файл набора изменён: ${path.basename(f.file)}`);
   }
 
+  // Снимаем прошлую нашу установку + чистим legacy dota_mods
+  const prevRec = await readJson(installRecordPath(), null);
+  await removeInstallRecord();
+  for (const f of await fs.readdir(path.join(gamePath, 'game', 'dota_mods')).catch(() => []))
+    if (/^pak\d+_dir\.vpk$/i.test(f)) await fs.rm(path.join(gamePath, 'game', 'dota_mods', f)).catch(() => {});
+
   const installs = []; // [{dir, files:[filename]}] — будет записано в installRecordPath
-  for (const dir of langDirs) {
-    await fs.mkdir(dir, { recursive: true });
-    if (!fss.existsSync(path.join(dir, 'pak01_dir.vpk')))
-      throw new Error(`В папке ${path.basename(dir)} нет pak01_dir.vpk — проверьте путь к игре`);
+  try {
+    for (const dir of langDirs) {
+      await fs.mkdir(dir, { recursive: true });
+      if (!fss.existsSync(path.join(dir, 'pak01_dir.vpk')))
+        throw new Error(`В папке ${path.basename(dir)} нет pak01_dir.vpk — проверьте путь к игре`);
 
-    let n = 2;
-    const taken = new Set(await fs.readdir(dir).catch(() => []));
-    while (taken.has(`pak${String(n).padStart(2, '0')}_dir.vpk`)) { n++; if (n > 99) throw new Error(`В папке ${path.basename(dir)} нет свободных pak-слотов`); }
-    if (n - 2 + files.length > 99) throw new Error('Слишком много VPK для оверлея (максимум 99)');
+      let n = 2;
+      const taken = new Set(await fs.readdir(dir).catch(() => []));
+      while (taken.has(`pak${String(n).padStart(2, '0')}_dir.vpk`)) { n++; if (n > 99) throw new Error(`В папке ${path.basename(dir)} нет свободных pak-слотов`); }
+      if (n - 2 + files.length > 99) throw new Error('Слишком много VPK для оверлея (максимум 99)');
 
-    const dirInstalled = [];
-    try {
+      const dirInstalled = [];
+      const slot = { dir, files: dirInstalled };
+      installs.push(slot);
       for (let i = 0; i < files.length; i++) {
         const dest = path.join(dir, `pak${String(n + i).padStart(2, '0')}_dir.vpk`);
         await fs.copyFile(files[i].file, dest);
         if (await hashFile(dest) !== files[i].sha256) throw new Error(`Ошибка записи: ${path.basename(dest)}`);
-        dirInstalled.push({ name: path.basename(dest), modName: files[i].modName });
+        dirInstalled.push(path.basename(dest));
       }
-    } catch (e) {
-      for (const f of dirInstalled)
-        if (/^pak\d+_dir\.vpk$/i.test(f.name)) await fs.rm(path.join(dir, f.name)).catch(() => {});
-      throw e;
     }
-    installs.push({ dir, files: dirInstalled.map(f => f.name) });
+  } catch (e) {
+    // Установка охватывает несколько языковых каталогов: при сбое в одном
+    // из них удаляем уже скопированные файлы во всех каталогах.
+    for (const slot of installs)
+      for (const name of slot.files)
+        if (/^pak\d+_dir\.vpk$/i.test(name))
+          await fs.rm(path.join(slot.dir, name)).catch(() => {});
+    throw e;
   }
 
   // Управление шрифтами интерфейса: если в наборе есть кастомные шрифты — устанавливаем
@@ -1075,7 +1088,10 @@ function vrfExePath() {
   return vrfExeCandidates()[0];
 }
 
-const VRF_RELEASES_API = 'https://api.github.com/repos/ValveResourceFormat/ValveResourceFormat/releases/latest';
+const VRF_RELEASES_API = 'https://api.github.com/repos/ValveResourceFormat/ValveResourceFormat/releases/tags/20.0';
+const VRF_RELEASE_TAG = '20.0';
+const VRF_ASSET_NAME = 'cli-windows-x64.zip';
+const VRF_ASSET_SHA256 = 'd32ab327b8bbb42a2528866afb03bb582bdb779d0005488da32b90292afd3ff5';
 
 // ── CRC-32 (нужен для VPK V1 формата) ──────────────────────────────
 const CRC32_TABLE = (() => {
@@ -1602,18 +1618,24 @@ async function downloadVrfTool(sendProgress) {
   });
   if (!apiRes.ok) throw new Error(`GitHub API: HTTP ${apiRes.status}`);
   const release = await apiRes.json();
-  // Актуальные релизы VRF называются cli-windows-x64.zip (внутри Source2Viewer-CLI.exe),
-  // старые — *decompiler*windows*x64*.zip (внутри Decompiler.exe).
+  // Используем зафиксированный релиз и имя актива, чтобы обновление upstream
+  // не могло незаметно подменить исполняемый инструмент.
   const names = release.assets.map(a => a.name);
-  const asset = release.assets.find(a => /^cli-windows-x64\.zip$/i.test(a.name))
-    || release.assets.find(a => /decompiler.*windows.*x64.*\.zip$/i.test(a.name))
-    || release.assets.find(a => /windows.*x64.*\.zip$/i.test(a.name))
-    || release.assets.find(a => a.name.toLowerCase().includes('windows') && a.name.endsWith('.zip'));
+  if (release.tag_name !== VRF_RELEASE_TAG)
+    throw new Error(`VRF: GitHub вернул неожиданный релиз ${release.tag_name}`);
+  const asset = release.assets.find(a => a.name === VRF_ASSET_NAME);
   if (!asset) throw new Error(`VRF: не найден Windows-ZIP среди активов релиза (${names.join(', ')})`);
+  if (asset.digest !== `sha256:${VRF_ASSET_SHA256}`)
+    throw new Error('VRF: хэш актива не совпадает с зафиксированным значением');
   sendProgress(`Найден ${asset.name} (${(asset.size / 1024 / 1024).toFixed(1)} MB) — скачивание...`);
   const zipRes = await fetch(asset.browser_download_url, { signal: AbortSignal.timeout(120000) });
   if (!zipRes.ok) throw new Error(`Скачивание VRF: HTTP ${zipRes.status}`);
+  const finalUrl = new URL(zipRes.url);
+  if (finalUrl.protocol !== 'https:' || finalUrl.hostname !== 'github.com')
+    throw new Error(`Скачивание VRF: запрещённый адрес перенаправления ${zipRes.url}`);
   const bytes = Buffer.from(await zipRes.arrayBuffer());
+  if (hashBuffer(bytes) !== VRF_ASSET_SHA256)
+    throw new Error('VRF: загруженный архив не прошёл проверку SHA-256');
   const vrfDir  = path.join(toolsPath(), 'vrf');
   const zipFile = path.join(vrfDir, '_vrf_dl.zip');
   await fs.writeFile(zipFile, bytes);

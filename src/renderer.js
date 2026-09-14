@@ -176,7 +176,7 @@ async function downloadMissing() {
     const set = state.manifests.find(m => m.id === state.lastSetId);
     if (!set || set.state !== 'applied') {
       toast('Этот набор уже откачен или применён в другом запуске — нажмите «Применить набор» заново, затем «Установить в игру»', true);
-      btn.textContent = 'Набор не применён';
+      $('#applyButton').textContent = 'Набор не применён';
       return; // кнопка остаётся disabled — жать больше нечего
     }
       toast(`Скачивание: ${mod.name}`);
