@@ -451,6 +451,13 @@ async function downloadMod(mod) {
 async function findCachedFile(modId) {
   try { const entries = await fs.readdir(cachePath()); return entries.find(x => x.startsWith(`${safeId(modId)}-`) && /\.(vpk|zip)$/i.test(x)) || null; } catch { return null; }
 }
+async function findCachedIds(modIds) {
+  const ids = Array.isArray(modIds) ? modIds.map(String) : [];
+  if (!ids.length) return [];
+  let entries;
+  try { entries = await fs.readdir(cachePath()); } catch { return []; }
+  return ids.filter(id => entries.some(file => file.startsWith(`${safeId(id)}-`) && /\.(vpk|zip)$/i.test(file)));
+}
 async function listVpkFiles(root) {
   const output = [];
   async function walk(dir) { for (const entry of await fs.readdir(dir, { withFileTypes: true })) { const full = path.join(dir, entry.name); if (entry.isDirectory()) await walk(full); else if (entry.isFile() && /\.vpk$/i.test(entry.name)) output.push(full); } }
@@ -2178,6 +2185,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('settings:save', async (_, next) => { const current = await settings(); const gamePath = String(next.gamePath || current.gamePath).trim(); const voiceFolder = /^dota_[a-z]+$/i.test(String(next.voiceFolder || '')) ? String(next.voiceFolder) : ''; const autoCloseSteam = next.autoCloseSteam !== false; await writeJson(configPath(), { ...current, gamePath, voiceFolder, autoCloseSteam }); const saved = await settings(); return { ...saved, langFolders: gameLangFolders(saved.gamePath), vpkTool: await findVpkTool(gamePath) }; });
   ipcMain.handle('mod:download', async (_, mod) => downloadMod(mod));
   ipcMain.handle('mod:cached', async (_, id) => Boolean(await findCachedFile(id)));
+  ipcMain.handle('mods:cached-ids', async (_, ids) => findCachedIds(ids));
   ipcMain.handle('set:apply', async (_, payload) => applySet(payload));
   ipcMain.handle('sets:list', () => readJson(manifestPath(), []));
   ipcMain.handle('set:rollback', async (_, id) => rollback(id));

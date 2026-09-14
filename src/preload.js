@@ -5,7 +5,7 @@ contextBridge.exposeInMainWorld('mods', {
   installed: () => ipcRenderer.invoke('sets:list'), rollback: id => ipcRenderer.invoke('set:rollback', id), purgeHistory: () => ipcRenderer.invoke('sets:purge'), chooseGameFolder: () => ipcRenderer.invoke('dialog:game-folder'), openFolder: folder => ipcRenderer.invoke('set:open-folder', folder), openSource: () => ipcRenderer.invoke('source:open'), openAppRepository: () => ipcRenderer.invoke('app-repository:open'),
   installGame: setId => ipcRenderer.invoke('set:install-game', setId), clearGame: () => ipcRenderer.invoke('set:clear-game'),
   deleteWorkshop: modId => ipcRenderer.invoke('workshop:delete-mod', modId),
-  deleteCached: modId => ipcRenderer.invoke('mod:delete-cached', modId), installedIds: () => ipcRenderer.invoke('mods:installed-ids')
+  deleteCached: modId => ipcRenderer.invoke('mod:delete-cached', modId), cachedIds: ids => ipcRenderer.invoke('mods:cached-ids', ids), installedIds: () => ipcRenderer.invoke('mods:installed-ids')
 });
 contextBridge.exposeInMainWorld('workshop', {
   toolStatus:      gamePath => ipcRenderer.invoke('workshop:tool-status', gamePath),
