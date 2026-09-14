@@ -865,7 +865,7 @@ async function rollback(setId) {
     if (rec && rec.setId === setId) await fs.rm(installRecordPath(), { force: true }).catch(() => {});
     return { set: savedSet, skipped: [], failed: [] };
   }
-  const isInstalled = Boolean(rec && rec.setId === setId);
+  const isInstalled = Boolean(rec && rec.setId === setId && (await activeSetId()) === setId);
   const apps = isInstalled ? await ensureAppsClosed(null) : { steamWasRunning: false };
   try {
     return await withCatalogLock(async () => {
@@ -912,7 +912,7 @@ async function rollback(setId) {
 async function removeModFromSet({ setId, modId }) {
   if (!setId || !modId) throw new Error('Не выбран мод для удаления');
   const rec = await readJson(installRecordPath(), null);
-  const isInstalled = Boolean(rec && rec.setId === setId);
+  const isInstalled = Boolean(rec && rec.setId === setId && (await activeSetId()) === setId);
   const apps = isInstalled ? await ensureAppsClosed(null) : { steamWasRunning: false };
   try {
     return await withCatalogLock(async () => {
@@ -1734,8 +1734,8 @@ async function closeGameProc(id) {
   const pids = parseTasklistRows(stdout).filter(row => row.image === proc.image).map(row => row.pid);
   if (!pids.length) return true;
   // Сначала просим процессы закрыться, затем принудительно завершаем только
-  // найденные PID с дочерними процессами. Steam иногда держит дочерний
-  // steamwebhelper и из-за этого обычный taskkill не срабатывает.
+  // найденные PID с дочерними процессами. Steam может быстро перезапустить
+  // steam.exe, поэтому после первой попытки повторно получаем список PID.
   for (const pid of pids)
     await execFileAsync('taskkill', ['/PID', String(pid), '/T'], { timeout: 8000, windowsHide: true }).catch(() => {});
   for (let i = 0; i < 8; i++) {
@@ -1745,8 +1745,13 @@ async function closeGameProc(id) {
     if (!st[id]) return true;
   }
   const remaining = await execFileAsync('tasklist', ['/FO', 'CSV', '/NH'], { timeout: 8000, windowsHide: true });
-  for (const pid of parseTasklistRows(remaining).filter(row => row.image === proc.image).map(row => row.pid))
+  const remainingPids = parseTasklistRows(remaining).filter(row => row.image === proc.image).map(row => row.pid);
+  for (const pid of remainingPids)
     await execFileAsync('taskkill', ['/F', '/T', '/PID', String(pid)], { timeout: 8000, windowsHide: true }).catch(() => {});
+  // If Steam respawned between tasklist and taskkill, terminate the image
+  // again by name. The image name is a fixed allowlisted process, not user input.
+  if (id === 'steam')
+    await execFileAsync('taskkill', ['/F', '/T', '/IM', 'steam.exe'], { timeout: 8000, windowsHide: true }).catch(() => {});
   for (let i = 0; i < 6; i++) {
     await new Promise(r => setTimeout(r, 500));
     const st = await runningGameProcs();
