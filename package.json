@@ -15,9 +15,6 @@
     "electron": "^44.3.0",
     "electron-builder": "^26.15.3"
   },
-  "allowScripts": {
-    "electron@37.10.3": true
-  },
   "build": {
     "appId": "com.dotamodset.app",
     "productName": "Dota Mod Set",

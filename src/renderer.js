@@ -115,7 +115,7 @@ function renderCatalog() {
   const list = filteredMods(); const conflicts = new Set(conflictMap().flatMap(([, mods]) => mods.map(m => m.id))); const selected = new Set(state.cart.map(m => m.id));
   $('#catalogTitle').textContent = state.hero !== 'all' ? state.hero : categoryName(state.category); $('#catalogDescription').textContent = `${list.length} ${list.length === 1 ? 'мод' : 'модов'} · на карточке указан заменяемый элемент`;
   $('#modGrid').innerHTML = list.map(mod => { const status = modStatus(mod); const statusBadge = conflicts.has(mod.id) ? '<span class="status conflict">КОНФЛИКТ</span>' : status === 'ready' ? '<span class="status ready">ГОТОВО</span>' : status === 'demo' ? '<span class="status download">ДЕМО</span>' : ''; const inCart = selected.has(mod.id); const hasImage = Boolean(mod.previewUrl);   const image = hasImage ? `<img class="preview-image" src="${escapeHtml(mod.previewUrl)}" alt="" loading="lazy" decoding="async" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'">` : ''; return `<article class="mod-card ${inCart ? 'selected' : ''} ${conflicts.has(mod.id) ? 'conflict' : ''}" data-mid="${escapeHtml(mod.id)}"><div class="preview-wrap">${image}<div class="avatar ${mod.hero === 'Общее' ? 'global' : ''}" style="${hasImage ? 'display:none' : ''}">${initials(mod.hero)}</div></div><div class="card-body"><div class="card-top">${statusBadge}${state.installed.has(mod.id) ? '<span class="status ingame">В ИГРЕ ✓</span>' : ''}</div><div class="card-title">${escapeHtml(mod.name)}</div><div class="card-hero">${escapeHtml(mod.hero)} · ${escapeHtml(categoryName(mod.category))}</div><div class="card-replaces">Заменяет: ${escapeHtml(mod.replaces)}</div><div class="card-footer">${mod.size && mod.size !== '—' ? `<span class="counter">${escapeHtml(mod.size)}</span>` : ''}<div class="card-actions">${status === 'download' ? `<button class="download-button" data-download="${escapeHtml(mod.id)}">Скачать</button>` : ''}${mod.source === 'Мастерская' && !state.installed.has(mod.id) ? `<button class="delete-button" data-delws="${escapeHtml(mod.id)}" title="Удалить сборку (VPK, кэш, карточка)">🗑</button>` : (status === 'ready' && !state.installed.has(mod.id)) ? `<button class="delete-button" data-delcache="${escapeHtml(mod.id)}" title="Удалить скачанный файл из кэша">🗑</button>` : ''}<button class="add-button" data-mod="${escapeHtml(mod.id)}"${state.installed.has(mod.id) && !inCart ? ' disabled title="Уже установлен в игре"' : ''}>${inCart ? 'Убрать' : state.installed.has(mod.id) ? 'В игре ✓' : 'В набор'}</button></div></div></div></article>`; }).join('');
-  $('#emptyState').classList.toggle('hidden', list.length > 0); document.querySelectorAll('[data-mod]').forEach(button => button.onclick = () => toggleCart(button.dataset.mod)); document.querySelectorAll('[data-download]').forEach(button => button.onclick = () => downloadOne(button.dataset.download)); document.querySelectorAll('[data-delws]').forEach(button => button.onclick = () => deleteWorkshopMod(button.dataset.delws)); document.querySelectorAll('[data-delcache]').forEach(button => button.onclick = () => deleteCachedMod(button.dataset.delcache));
+  $('#emptyState').classList.toggle('hidden', list.length > 0);
 }
 async function deleteCachedMod(id) {
   const mod = state.mods.find(m => m.id === id);
@@ -336,7 +336,14 @@ function openModDetail(id) {
   if (!dlg.open) dlg.showModal();
 }
 $('#modGrid').addEventListener('click', e => {
-  if (e.target.closest('button')) return;
+  const button = e.target.closest('button');
+  if (button) {
+    if (button.dataset.mod) return toggleCart(button.dataset.mod);
+    if (button.dataset.download) return downloadOne(button.dataset.download);
+    if (button.dataset.delws) return deleteWorkshopMod(button.dataset.delws);
+    if (button.dataset.delcache) return deleteCachedMod(button.dataset.delcache);
+    return;
+  }
   const card = e.target.closest('article[data-mid]');
   if (card) openModDetail(card.dataset.mid);
 });

@@ -16,6 +16,14 @@ const dataPath = () => path.join(app.getPath('userData'), 'DotaModSet');
 const configPath = () => path.join(dataPath(), 'config.json');
 const manifestPath = () => path.join(dataPath(), 'installed-manifests.json');
 const cachePath = () => path.join(dataPath(), 'cache');
+let cacheIndexPromise = null;
+function invalidateCacheIndex() { cacheIndexPromise = null; }
+async function cacheIndex() {
+  if (!cacheIndexPromise) {
+    cacheIndexPromise = fs.readdir(cachePath()).catch(() => []);
+  }
+  return cacheIndexPromise;
+}
 const demoPath = () => path.join(__dirname, 'catalog.demo.json');
 const fontsBackupPath = () => path.join(dataPath(), 'fonts-default-backup');
 // Расширения файлов ассетов, которые умеем авто-упаковывать в VPK
@@ -402,6 +410,7 @@ async function recoverOrphanWorkshopVpks(known) {
       if (!await findCachedFile(id)) {
         await fs.mkdir(cachePath(), { recursive: true });
         await fs.copyFile(full, path.join(cachePath(), `${safeId(id)}-workshop.vpk`));
+        invalidateCacheIndex();
       }
       recovered.push(entry);
     } catch { /* битый файл — пропускаем, не роняем каталог */ }
@@ -446,16 +455,17 @@ async function downloadMod(mod) {
   else await fs.rm(tmpFile, { force: true }).catch(() => {});
   // Sidecar с полным хэшем: prepareVpk сверит кэш перед использованием
   await fs.writeFile(destination + '.sha256', digest, 'utf8').catch(() => {});
+  invalidateCacheIndex();
   return { file: destination, hash: digest, size };
 }
 async function findCachedFile(modId) {
-  try { const entries = await fs.readdir(cachePath()); return entries.find(x => x.startsWith(`${safeId(modId)}-`) && /\.(vpk|zip)$/i.test(x)) || null; } catch { return null; }
+  const entries = await cacheIndex();
+  return entries.find(x => x.startsWith(`${safeId(modId)}-`) && /\.(vpk|zip)$/i.test(x)) || null;
 }
 async function findCachedIds(modIds) {
   const ids = Array.isArray(modIds) ? modIds.map(String) : [];
   if (!ids.length) return [];
-  let entries;
-  try { entries = await fs.readdir(cachePath()); } catch { return []; }
+  const entries = await cacheIndex();
   return ids.filter(id => entries.some(file => file.startsWith(`${safeId(id)}-`) && /\.(vpk|zip)$/i.test(file)));
 }
 async function listVpkFiles(root) {
@@ -1039,6 +1049,7 @@ async function deleteCachedMod(modId) {
     await fs.rm(path.join(cachePath(), f + '.sha256')).catch(() => {}); // sidecar хэша
   }
   if (!removed) throw new Error('Файл в кэше не найден — возможно, уже удалён');
+  invalidateCacheIndex();
   return { removed };
   });
 }
@@ -1060,6 +1071,7 @@ async function deleteWorkshopMod(modId) {
   if (entry.localVpk && isSubpath(path.resolve(entry.localVpk), wsDir))
     await fs.rm(entry.localVpk).catch(() => {});
   await fs.rm(path.join(cachePath(), `${safeId(id)}-workshop.vpk`)).catch(() => {});
+  invalidateCacheIndex();
   await writeJson(catalogFile, catalog.filter(m => !(m && m.id === id)));
   return { name: entry.name || id };
   });
