@@ -968,6 +968,8 @@ async function installSetToGameInner(setId) {
   if (!fss.existsSync(gamePath)) throw new Error('Папка Dota 2 не найдена — укажите путь в настройках');
   const files = [...(set.files || [])].sort((a, b) => a.slot - b.slot);
   if (!files.length) throw new Error('В наборе нет файлов');
+  const currentSetId = await activeSetId();
+  if (currentSetId === setId) throw new Error('Этот набор уже установлен в игре');
 
   // Устанавливаем во ВСЕ языковые папки сразу: шрифты и скины не должны
   // зависеть от текущего языка интерфейса. Если у пользователя только
@@ -1061,6 +1063,16 @@ async function installedModIds() {
   const set = manifests.find(x => x.id === rec.setId);
   if (!set) return [];
   return [...new Set((set.files || []).map(f => f.modId).filter(Boolean))];
+}
+async function activeSetId() {
+  const rec = await readJson(installRecordPath(), null);
+  if (!rec || !rec.setId) return null;
+  const installs = rec.installs || (rec.dir ? [{ dir: rec.dir, files: rec.files || [] }] : []);
+  const alive = installs.some(slot => {
+    const files = slot && slot.files || [];
+    return files.length > 0 && files.every(file => fss.existsSync(path.join(slot.dir, file)));
+  });
+  return alive ? String(rec.setId) : null;
 }
 // Удаление скачанного D2PFX из кэша (освободить место). Безопасно:
 // применённые наборы самодостаточны (копии в pak-slots), файлы в игре не трогаем.
@@ -2232,6 +2244,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('mods:cached-ids', async (_, ids) => findCachedIds(ids));
   ipcMain.handle('set:apply', async (_, payload) => applySet(payload));
   ipcMain.handle('sets:list', () => readJson(manifestPath(), []));
+  ipcMain.handle('set:active-id', activeSetId);
   ipcMain.handle('set:rollback', async (_, id) => rollback(id));
   ipcMain.handle('sets:purge', async () => purgeHistory());
   ipcMain.handle('set:install-game', async (_, id) => installSetToGame(String(id || '')));

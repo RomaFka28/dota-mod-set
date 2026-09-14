@@ -30,7 +30,7 @@ const CATEGORIES = [
   ['other', '○', 'Прочее'],
   ['hero-skins', '◉', 'Скины героев (прочие)'],
 ];
-const state = { mods: [], cart: [], category: 'all', hero: 'all', query: '', availability: 'all', settings: null, manifests: [], cached: new Set(), installed: new Set(), catalogMode: 'demo' };
+const state = { mods: [], cart: [], category: 'all', hero: 'all', query: '', availability: 'all', settings: null, manifests: [], activeSetId: null, cached: new Set(), installed: new Set(), catalogMode: 'demo' };
 const $ = selector => document.querySelector(selector);
 const escapeHtml = text => String(text ?? '').replace(/[&<>'"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;' }[c]));
 const initials = value => String(value || 'D').split(/[\s-]+/).map(x => x[0]).join('').slice(0, 2).toUpperCase();
@@ -164,7 +164,7 @@ async function refreshCached() {
   state.cached = new Set(await window.mods.cachedIds(state.mods.map(mod => mod.id)));
 }
 // Какие моды физически лежат в игре (для бейджа «В ИГРЕ» — защита от дублей)
-async function refreshInstalled() { try { state.installed = new Set(await window.mods.installedIds()); } catch { state.installed = new Set(); } }
+async function refreshInstalled() { try { state.installed = new Set(await window.mods.installedIds()); state.activeSetId = await window.mods.activeSetId(); } catch { state.installed = new Set(); state.activeSetId = null; } }
 async function downloadOne(id) { const mod = state.mods.find(item => item.id === id); if (!mod) return; try { toast(`Скачивание: ${mod.name}`); const result = await window.mods.download(mod); state.cached.add(mod.id); toast(`${mod.name}: готово (${Math.round(result.size / 1024 / 1024 * 10) / 10} MB)`); render(); } catch (error) { toast(error.message || 'Не удалось скачать мод', true); } }
 async function downloadMissing() {
   const missing = state.cart.filter(mod => !state.cached.has(mod.id));
@@ -309,7 +309,30 @@ function renderGamePathStatus() {
   else
     el.textContent = '✗ Программа не нашла Dota 2 сама (нет game/dota/pak01_dir.vpk) — нажмите «Выбрать» и укажите папку вручную.';
 }
-async function showHistory() { state.manifests = await window.mods.installed(); const list = $('#historyList'); list.innerHTML = state.manifests.length ? state.manifests.map(set => `<article class="history-item"><div class="history-row"><div><div class="history-name">${escapeHtml(set.id)}</div><div class="history-meta">${new Date(set.createdAt).toLocaleString('ru-RU')} · ${set.files.length} VPK · ${escapeHtml(set.state)}</div></div>${set.state === 'applied' ? `<span style="display:flex;gap:6px"><button class="install-game" data-install="${escapeHtml(set.id)}">Установить</button><button class="rollback" data-rollback="${escapeHtml(set.id)}">Откатить</button></span>` : ''}</div></article>`).join('') : '<div class="empty">Установленных наборов ещё нет.</div>'; document.querySelectorAll('[data-rollback]').forEach(button => button.onclick = async () => { try { const result = await window.mods.rollback(button.dataset.rollback); await refreshInstalled(); render(); if (result.failed && result.failed.length) toast(`Откат частичный: не удалены (возможно, держит Steam): ${result.failed.join(', ')} — закройте игру и повторите`, true); else toast(result.skipped.length ? `Откат выполнен; пропущено изменённых файлов: ${result.skipped.length}` : 'Набор безопасно откачен'); showHistory(); } catch (error) { toast(error.message, true); } }); document.querySelectorAll('[data-install]').forEach(button => button.onclick = async () => { button.disabled = true; try { const res = await window.mods.installGame(button.dataset.install); playChime('ok'); toast(`Моды в игре: ${res.files.map(f => f.name).join(', ')}`); if (res.prevDirChanged) toast('⚠ Прошлая установка была в другой папке озвучки — сверьте язык в Доте', true); await refreshInstalled(); render(); } catch (error) { playChime('err'); toast(error.message, true); } finally { button.disabled = false; } }); $('#historyClearGame').onclick = async () => { if (!await confirmStyled('Убрать моды из игры (удалить наши VPK из папки озвучки)?', { title: 'Очистить папку в игре', okText: 'Убрать' })) return; try { const res = await window.mods.clearGame(); playChime('ok'); toast(res.removed ? `Моды убраны из игры (файлов: ${res.removed})` : 'В игре уже нет наших модов'); await refreshInstalled(); render(); } catch (error) { playChime('err'); toast(error.message, true); } }; $('#historyPurge').onclick = async () => { if (!await confirmStyled('Удалить из истории все откаченные и оборванные наборы (их папки тоже снесутся)? Применённые наборы не тронутся.', { title: 'Очистить историю', okText: 'Очистить' })) return; try { const res = await window.mods.purgeHistory(); playChime('ok'); toast(res.removed ? `История почищена: записей ${res.removed}, папок снесено ${res.dirsRemoved}` : 'История уже чиста'); showHistory(); } catch (error) { playChime('err'); toast(error.message, true); } }; $('#historyDialog').showModal(); }
+async function showHistory() {
+  [state.manifests, state.activeSetId] = await Promise.all([window.mods.installed(), window.mods.activeSetId()]);
+  const list = $('#historyList');
+  list.innerHTML = state.manifests.length ? state.manifests.map(set => {
+    const active = set.state === 'applied' && set.id === state.activeSetId;
+    const actions = set.state !== 'applied' ? '' : active
+      ? `<span class="history-actions"><button class="install-game" disabled title="???? ????? ??? ????????? ? ????">??? ? ???? ?</button><button class="clear-set" data-clear-set="${escapeHtml(set.id)}">?????? ?? ????</button></span>`
+      : `<span class="history-actions"><button class="install-game" data-install="${escapeHtml(set.id)}">?????????? ? ????</button><button class="rollback" data-rollback="${escapeHtml(set.id)}">??????? ?????</button></span>`;
+    const status = active ? '? ????' : set.state === 'applied' ? '?????' : set.state;
+    return `<article class="history-item"><div class="history-row"><div><div class="history-name">${escapeHtml(set.id)}</div><div class="history-meta">${new Date(set.createdAt).toLocaleString('ru-RU')} ? ${set.files.length} VPK ? ${escapeHtml(status)}</div></div>${actions}</div></article>`;
+  }).join('') : '<div class="empty">??????? ? ??????? ??? ???.</div>';
+  document.querySelectorAll('[data-rollback]').forEach(button => button.onclick = async () => {
+    if (!await confirmStyled('??????? ?????????????? ????? ? ??? ?????? ?? ???????? ????? ????? ??? ????? ????? ??????? ??????.', { title: '??????? ?????', okText: '???????' })) return;
+    try { const result = await window.mods.rollback(button.dataset.rollback); await refreshInstalled(); render(); toast(result.failed?.length ? `???????? ?????????: ?????? ?????? ${result.failed.length}` : '????? ?????? ?? ???????'); showHistory(); } catch (error) { toast(error.message, true); }
+  });
+  document.querySelectorAll('[data-clear-set]').forEach(button => button.onclick = async () => {
+    if (!await confirmStyled('?????? ???????? VPK ????? ?????? ?? ????? ??? ????? ????????? ? ??????? ? ??? ????? ????? ?????????? ?????.', { title: '?????? ?? ????', okText: '??????', danger: false })) return;
+    try { const res = await window.mods.clearGame(); toast(res.removed ? `???????? ???? ?????? ?? ???? (??????: ${res.removed})` : '? ???? ??? ??? ????? ?????'); await refreshInstalled(); render(); showHistory(); } catch (error) { toast(error.message, true); }
+  });
+  document.querySelectorAll('[data-install]').forEach(button => button.onclick = async () => { button.disabled = true; try { const res = await window.mods.installGame(button.dataset.install); playChime('ok'); toast(`???? ? ????: ${res.files.map(f => f.name).join(', ')}`); await refreshInstalled(); render(); showHistory(); } catch (error) { playChime('err'); toast(error.message, true); } finally { button.disabled = false; } });
+  $('#historyClearGame').onclick = async () => { if (!await confirmStyled('?????? ???????? ???? ?? ????? ?????????????? ?????? ????????? ? ???????.', { title: '?????? ?? ????', okText: '??????', danger: false })) return; try { const res = await window.mods.clearGame(); playChime('ok'); toast(res.removed ? `???????? ???? ?????? ?? ???? (??????: ${res.removed})` : '? ???? ??? ??? ????? ?????'); await refreshInstalled(); render(); showHistory(); } catch (error) { toast(error.message, true); } };
+  $('#historyPurge').onclick = async () => { if (!await confirmStyled('??????? ?? ??????? ??? ????????? ? ?????????? ??????? ??????? ?????? ?? ????????.', { title: '???????? ???????', okText: '????????' })) return; try { const res = await window.mods.purgeHistory(); playChime('ok'); toast(res.removed ? `??????? ???????: ??????? ${res.removed}` : '??????? ??? ?????'); showHistory(); } catch (error) { toast(error.message, true); } };
+  $('#historyDialog').showModal();
+}
 async function boot() {
   if (!window.mods) {
     $('#catalogMode').textContent = 'Ошибка подключения приложения';
