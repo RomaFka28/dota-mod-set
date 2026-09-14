@@ -7,9 +7,11 @@ const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const { validateArchiveEntries } = require('./archive-safety');
 const { CATALOG_SOURCES, createAuthorSource, normalizeAuthorCatalog, validateCatalogUrl } = require('./catalog-sources');
+const { platformRoots, steamLibraryPaths, dotaPathFromLibrary } = require('./platform-paths');
 
 const execFileAsync = promisify(execFile);
-const DEFAULT_GAME_PATH = 'D:\\SteamLibrary\\steamapps\\common\\dota 2 beta';
+const PLATFORM_ROOTS = platformRoots();
+const DEFAULT_GAME_PATH = PLATFORM_ROOTS.defaultGamePath;
 const D2PFX_SOURCE = CATALOG_SOURCES[0];
 const SOURCE_ROOT = D2PFX_SOURCE.repositoryUrl;
 const APP_REPOSITORY = 'https://github.com/RomaFka28/dota-mod-set';
@@ -90,21 +92,23 @@ async function detectGamePath(force = false) {
   if (__detectTried && !force) return __detectedGamePath;
   __detectTried = true; __detectedGamePath = null;
   const libs = [];
-  const reg = await steamPathFromRegistry();
-  for (const root of [reg, 'C:\\Program Files (x86)\\Steam', 'C:\\Program Files\\Steam'].filter(Boolean)) {
-    libs.push(path.join(root, 'steamapps'));
+  const reg = process.platform === 'win32' ? await steamPathFromRegistry() : null;
+  const roots = process.platform === 'win32' ? [reg, ...PLATFORM_ROOTS.steamRoots].filter(Boolean) : PLATFORM_ROOTS.steamRoots;
+  for (const root of roots) {
+    libs.push(...steamLibraryPaths(root, process.platform));
     try {
-      const text = await fs.readFile(path.join(root, 'steamapps', 'libraryfolders.vdf'), 'utf8');
+      const steamapps = path.join(root, 'steamapps');
+      const text = await fs.readFile(path.join(steamapps, 'libraryfolders.vdf'), 'utf8');
       for (const m of text.matchAll(/"path"\s+"([^"]+)"/g))
-        libs.push(path.join(m[1].replace(/\\\\/g, '\\'), 'steamapps'));
+        libs.push(...steamLibraryPaths(m[1].replace(/\\\\/g, process.platform === 'win32' ? '\\' : '/'), process.platform));
     } catch { /* нет vdf — пропускаем */ }
   }
-  for (const d of ['D', 'E', 'F']) libs.push(`${d}:\\SteamLibrary\\steamapps`);
+  if (process.platform === 'win32') for (const d of ['D', 'E', 'F']) libs.push(`${d}:\\SteamLibrary\\steamapps`);
   const uniq = [...new Set(libs)];
   // Сначала строго: манифест 570 + pak01; потом мягко: только pak01
   for (const strict of [true, false]) {
     for (const lib of uniq) {
-      const dota = path.join(lib, 'common', 'dota 2 beta');
+      const dota = dotaPathFromLibrary(lib, process.platform);
       if (strict && !fss.existsSync(path.join(lib, 'appmanifest_570.acf'))) continue;
       if (isDotaDir(dota)) { __detectedGamePath = dota; return dota; }
     }
