@@ -368,7 +368,7 @@ async function showHistory() {
   }).join('') : '<div class="empty">Наборов в истории ещё нет.</div>';
   document.querySelectorAll('[data-rollback]').forEach(button => button.onclick = async () => {
     if (!await confirmStyled('Удалить подготовленный набор и его запись из истории? После этого его нужно будет собрать заново.', { title: 'Удалить набор', okText: 'Удалить' })) return;
-    try { const result = await window.mods.rollback(button.dataset.rollback); if (state.lastSetId === button.dataset.rollback) state.lastSetId = null; await refreshInstalled(); render(); toast(result.failed?.length ? `Удаление частичное: занято файлов ${result.failed.length}` : 'Набор удалён из истории'); showHistory(); } catch (error) { toast(error.message, true); }
+    try { const result = await window.mods.rollback(button.dataset.rollback); if (state.lastSetId === button.dataset.rollback) state.lastSetId = null; await refreshInstalled(); render(); toast(result.failed?.length ? `Удаление частичное: занято файлов ${result.failed.length}` : 'Набор удалён из истории'); showHistory(); } catch (error) { await refreshInstalled(); render(); toast(error.message, true); showHistory(); }
   });
   document.querySelectorAll('[data-clear-set]').forEach(button => button.onclick = async () => {
     if (!await confirmStyled('Убрать активные VPK этого набора из игры? Сам набор останется в истории и его можно будет установить снова.', { title: 'Убрать из игры', okText: 'Убрать', danger: false })) return;

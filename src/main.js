@@ -855,12 +855,22 @@ async function extendSet({ setId, mods, gamePath }) {
 }
 async function rollback(setId) {
   const rec = await readJson(installRecordPath(), null);
+  const manifestsBefore = await readJson(manifestPath(), []);
+  const savedSet = manifestsBefore.find(item => item.id === setId);
+  if (!savedSet) {
+    if (rec && rec.setId === setId) await fs.rm(installRecordPath(), { force: true }).catch(() => {});
+    throw new Error('Набор уже удалён или запись о нём устарела — обновите историю наборов');
+  }
+  if (savedSet.state !== 'applied') {
+    if (rec && rec.setId === setId) await fs.rm(installRecordPath(), { force: true }).catch(() => {});
+    return { set: savedSet, skipped: [], failed: [] };
+  }
   const isInstalled = Boolean(rec && rec.setId === setId);
-  const apps = isInstalled ? await ensureAppsClosed(null).catch(() => ({ steamWasRunning: false })) : { steamWasRunning: false };
+  const apps = isInstalled ? await ensureAppsClosed(null) : { steamWasRunning: false };
   try {
     return await withCatalogLock(async () => {
     const manifests = await readJson(manifestPath(), []); const set = manifests.find(x => x.id === setId && x.state === 'applied');
-    if (!set) throw new Error('Активный манифест не найден');
+    if (!set) throw new Error('Набор уже изменён — обновите историю наборов');
     const resolvedGame = path.resolve(set.gamePath || (await settings()).gamePath);
 
     // Если этот набор сейчас был установлен в игре — снимаем его из игры и восстанавливаем дефолтные шрифты
@@ -903,7 +913,7 @@ async function removeModFromSet({ setId, modId }) {
   if (!setId || !modId) throw new Error('Не выбран мод для удаления');
   const rec = await readJson(installRecordPath(), null);
   const isInstalled = Boolean(rec && rec.setId === setId);
-  const apps = isInstalled ? await ensureAppsClosed(null).catch(() => ({ steamWasRunning: false })) : { steamWasRunning: false };
+  const apps = isInstalled ? await ensureAppsClosed(null) : { steamWasRunning: false };
   try {
     return await withCatalogLock(async () => {
       const manifests = await readJson(manifestPath(), []);
@@ -1688,9 +1698,11 @@ async function closeGameProc(id) {
   const { stdout } = await execFileAsync('tasklist', ['/FO', 'CSV', '/NH'], { timeout: 8000, windowsHide: true });
   const pids = parseTasklistRows(stdout).filter(row => row.image === proc.image).map(row => row.pid);
   if (!pids.length) return true;
-  // Закрываем только найденные PID, а не все процессы с таким именем.
+  // Сначала просим процессы закрыться, затем принудительно завершаем только
+  // найденные PID с дочерними процессами. Steam иногда держит дочерний
+  // steamwebhelper и из-за этого обычный taskkill не срабатывает.
   for (const pid of pids)
-    await execFileAsync('taskkill', ['/PID', String(pid)], { timeout: 8000, windowsHide: true }).catch(() => {});
+    await execFileAsync('taskkill', ['/PID', String(pid), '/T'], { timeout: 8000, windowsHide: true }).catch(() => {});
   for (let i = 0; i < 8; i++) {
     await new Promise(r => setTimeout(r, 500));
     const st = await runningGameProcs();
@@ -1699,10 +1711,14 @@ async function closeGameProc(id) {
   }
   const remaining = await execFileAsync('tasklist', ['/FO', 'CSV', '/NH'], { timeout: 8000, windowsHide: true });
   for (const pid of parseTasklistRows(remaining).filter(row => row.image === proc.image).map(row => row.pid))
-    await execFileAsync('taskkill', ['/F', '/PID', String(pid)], { timeout: 8000, windowsHide: true }).catch(() => {});
-  await new Promise(r => setTimeout(r, 1000));
-  const st = await runningGameProcs();
-  if (st.unknown || st[id]) throw new Error(`${proc.label} не закрывается — закройте вручную через диспетчер задач`);
+    await execFileAsync('taskkill', ['/F', '/T', '/PID', String(pid)], { timeout: 8000, windowsHide: true }).catch(() => {});
+  for (let i = 0; i < 6; i++) {
+    await new Promise(r => setTimeout(r, 500));
+    const st = await runningGameProcs();
+    if (st.unknown) throw new Error(`${proc.label}: не удалось проверить процессы — закройте вручную через диспетчер задач`);
+    if (!st[id]) return true;
+  }
+  throw new Error(`${proc.label} не закрывается — закройте вручную через диспетчер задач и повторите`);
   return true;
 }
 // ── PREFLIGHT-BLOCK-END ──
