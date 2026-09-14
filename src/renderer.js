@@ -199,6 +199,12 @@ async function refreshCached() {
 }
 // Какие моды физически лежат в игре (для бейджа «В ИГРЕ» — защита от дублей)
 async function refreshInstalled() { try { state.installed = new Set(await window.mods.installedIds()); state.activeSetId = await window.mods.activeSetId(); } catch { state.installed = new Set(); state.activeSetId = null; } }
+function syncPreparedState(manifests) {
+  state.manifests = manifests;
+  const prepared = manifests.filter(set => set.state === 'applied').sort((a, b) => String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt)))[0] || null;
+  state.lastSetId = prepared?.id || null;
+  state.preparedSetMods = new Set(prepared?.files?.map(file => file.modId).filter(Boolean) || []);
+}
 async function downloadOne(id) { const mod = state.mods.find(item => item.id === id); if (!mod) return; try { toast(`Скачивание: ${mod.name}`); const result = await window.mods.download(mod); state.cached.add(mod.id); toast(`${mod.name}: готово (${Math.round(result.size / 1024 / 1024 * 10) / 10} MB)`); render(); } catch (error) { toast(error.message || 'Не удалось скачать мод', true); } }
 async function downloadMissing() {
   const missing = state.cart.filter(mod => !state.cached.has(mod.id));
@@ -347,9 +353,7 @@ function renderGamePathStatus() {
 }
 async function showHistory() {
   [state.manifests, state.activeSetId] = await Promise.all([window.mods.installed(), window.mods.activeSetId()]);
-  const prepared = state.manifests.filter(set => set.state === 'applied').sort((a, b) => String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt)))[0] || null;
-  state.lastSetId = prepared?.id || null;
-  state.preparedSetMods = new Set(prepared?.files?.map(file => file.modId).filter(Boolean) || []);
+  syncPreparedState(state.manifests);
   const list = $('#historyList');
   list.innerHTML = state.manifests.length ? state.manifests.map(set => {
     const active = set.state === 'applied' && set.id === state.activeSetId;
@@ -361,7 +365,21 @@ async function showHistory() {
   }).join('') : '<div class="empty">Наборов в истории ещё нет.</div>';
   document.querySelectorAll('[data-rollback]').forEach(button => button.onclick = async () => {
     if (!await confirmStyled('Удалить подготовленный набор и его запись из истории? После этого его нужно будет собрать заново.', { title: 'Удалить набор', okText: 'Удалить' })) return;
-    try { const result = await window.mods.rollback(button.dataset.rollback); if (state.lastSetId === button.dataset.rollback) state.lastSetId = null; await refreshInstalled(); render(); toast(result.failed?.length ? `Удаление частичное: занято файлов ${result.failed.length}` : 'Набор удалён из истории'); showHistory(); } catch (error) { await refreshInstalled(); render(); toast(error.message, true); showHistory(); }
+    const deletedSetId = button.dataset.rollback;
+    try {
+      const result = await window.mods.rollback(deletedSetId);
+      syncPreparedState(await window.mods.installed());
+      await refreshInstalled();
+      render();
+      toast(result.failed?.length ? `Удаление частичное: занято файлов ${result.failed.length}` : 'Набор удалён из истории');
+      await showHistory();
+    } catch (error) {
+      syncPreparedState(await window.mods.installed());
+      await refreshInstalled();
+      render();
+      toast(error.message, true);
+      await showHistory();
+    }
   });
   document.querySelectorAll('[data-clear-set]').forEach(button => button.onclick = async () => {
     if (!await confirmStyled('Убрать активные VPK этого набора из игры? Сам набор останется в истории и его можно будет установить снова.', { title: 'Убрать из игры', okText: 'Убрать', danger: false })) return;
