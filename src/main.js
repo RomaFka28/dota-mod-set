@@ -824,14 +824,20 @@ async function extendSet({ setId, mods, gamePath }) {
         throw new Error(`Файл текущего набора изменён или пропал: ${path.basename(entry.file)}`);
     }
     const existingIds = new Set(manifest.files.map(file => file.modId).filter(Boolean));
-    const duplicate = mods.find(mod => existingIds.has(mod.id));
-    if (duplicate) throw new Error(`«${duplicate.name}» уже есть в текущем наборе`);
+    const newMods = [];
+    const skippedIds = new Set();
+    for (const mod of mods) {
+      if (!mod || existingIds.has(mod.id) || skippedIds.has(mod.id)) continue;
+      skippedIds.add(mod.id);
+      newMods.push(mod);
+    }
+    if (!newMods.length) return { ...manifest, addedFiles: [], skippedDuplicate: true };
     const temp = path.join(dataPath(), `transaction-${crypto.randomUUID()}`);
     const added = [];
     await fs.mkdir(temp, { recursive: true });
     try {
       const files = [];
-      for (const mod of mods) for (const vpk of await prepareVpk(mod, temp)) files.push({ mod, vpk });
+      for (const mod of newMods) for (const vpk of await prepareVpk(mod, temp)) files.push({ mod, vpk });
       if (!files.length) throw new Error('Нет готовых VPK для добавления');
       const maxSlot = manifest.files.reduce((max, file) => Math.max(max, Number(file.slot) || 0), 0);
       for (let index = 0; index < files.length; index++) {
@@ -1093,6 +1099,7 @@ async function removeInstallRecord(gamePathFallback) {
   return removed;
 }
 async function installSetToGame(setId) {
+  if ((await activeSetId()) === setId) return { alreadyInstalled: true, files: [] };
   // Префлайт ПЕРВЫМ: копирование в папки игры при запущенных Steam/Dota 2
   // даст файловые блокировки. Авто-режим закрывает сам + перезапускает Steam.
   const apps = await ensureAppsClosed(null);
@@ -1109,7 +1116,7 @@ async function installSetToGameInner(setId) {
   const files = [...(set.files || [])].sort((a, b) => a.slot - b.slot);
   if (!files.length) throw new Error('В наборе нет файлов');
   const currentSetId = await activeSetId();
-  if (currentSetId === setId) throw new Error('Этот набор уже установлен в игре');
+  if (currentSetId === setId) return { alreadyInstalled: true, files: [] };
 
   // Устанавливаем во ВСЕ языковые папки сразу: шрифты и скины не должны
   // зависеть от текущего языка интерфейса. Если у пользователя только

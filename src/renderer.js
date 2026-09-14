@@ -239,7 +239,9 @@ async function apply() {
     state.cart = [];
     $('#resultTitle').textContent = extending ? `Набор дополнен: ${manifest.files.length} VPK` : `Набор применён: ${manifest.files.length} VPK`;
     $('#resultMessage').textContent = extending
-      ? `В набор ${manifest.id} добавлено ${manifest.addedFiles.length} VPK. Старые файлы сохранены, базовый pak01 не изменён.`
+      ? (manifest.skippedDuplicate
+        ? 'Выбранные моды уже находятся в текущем наборе. Новые файлы не добавлялись.'
+        : `В набор ${manifest.id} добавлено ${manifest.addedFiles.length} VPK. Старые файлы сохранены, базовый pak01 не изменён.`)
       : `Создан изолированный набор ${manifest.id}. Файлы скопированы, базовый pak01 не изменён. Статус: ${manifest.state}.`;
     $('#resultPath').textContent = manifest.target;
     renderResultFiles(manifest);
@@ -271,6 +273,12 @@ async function installLastSet() {
     if (rt && (rt.dota || rt.steam || rt.unknown) && state.settings?.autoCloseSteam !== false)
       toast('Закрываю Steam/Dota, ставлю моды и перезапускаю Steam…');
     const res = await window.mods.installGame(state.lastSetId);
+    if (res.alreadyInstalled) {
+      $('#resultMessage').textContent = 'Этот набор уже установлен в игре. Повторная установка не требуется.';
+      btn.textContent = 'Уже установлено ✓';
+      await refreshInstalled(); render();
+      return;
+    }
     playChime('ok');
     $('#resultMessage').textContent =
       `✅ Моды в игре: ${res.files.map(f => f.name).join(', ')}. Папка: ${res.dir}. ` +
@@ -385,7 +393,7 @@ async function showHistory() {
     if (!await confirmStyled('Убрать активные VPK этого набора из игры? Сам набор останется в истории и его можно будет установить снова.', { title: 'Убрать из игры', okText: 'Убрать', danger: false })) return;
     try { const res = await window.mods.clearGame(); toast(res.removed ? `Активные моды убраны из игры (файлов: ${res.removed})` : 'В игре уже нет наших модов'); await refreshInstalled(); render(); showHistory(); } catch (error) { toast(error.message, true); }
   });
-  document.querySelectorAll('[data-install]').forEach(button => button.onclick = async () => { button.disabled = true; try { const res = await window.mods.installGame(button.dataset.install); playChime('ok'); toast(`Моды в игре: ${res.files.map(f => f.name).join(', ')}`); await refreshInstalled(); render(); showHistory(); } catch (error) { playChime('err'); toast(error.message, true); } finally { button.disabled = false; } });
+  document.querySelectorAll('[data-install]').forEach(button => button.onclick = async () => { button.disabled = true; try { const res = await window.mods.installGame(button.dataset.install); playChime('ok'); toast(res.alreadyInstalled ? 'Этот набор уже установлен в игре' : `Моды в игре: ${res.files.map(f => f.name).join(', ')}`); await refreshInstalled(); render(); showHistory(); } catch (error) { playChime('err'); toast(error.message, true); } finally { button.disabled = false; } });
   $('#historyPurge').onclick = async () => { if (!await confirmStyled('Удалить из истории все удалённые и оборванные наборы? Готовые наборы не тронутся.', { title: 'Очистить историю', okText: 'Очистить' })) return; try { const res = await window.mods.purgeHistory(); playChime('ok'); toast(res.removed ? `История очищена: записей ${res.removed}` : 'История уже чиста'); showHistory(); } catch (error) { toast(error.message, true); } };
   $('#historyDialog').showModal();
 }
