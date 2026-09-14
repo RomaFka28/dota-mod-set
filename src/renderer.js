@@ -143,7 +143,8 @@ async function deleteWorkshopMod(id) {
 }
 async function removeInstalledMod(id) {
   const mod = state.mods.find(item => item.id === id);
-  if (!mod || !state.activeSetId) return;
+  if (!mod) return;
+  if (!state.activeSetId) { toast('Активный набор не найден. Обновите окно приложения после установки модов.', true); return; }
   if (!await confirmStyled(`Удалить «${mod.name}» из текущего набора? Остальные моды останутся.`, { title: 'Удалить мод', okText: 'Удалить' })) return;
   try {
     const result = await window.mods.removeMod({ setId: state.activeSetId, modId: id });

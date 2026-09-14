@@ -919,7 +919,9 @@ async function removeModFromSet({ setId, modId }) {
         if (await hashFile(entry.file) !== entry.sha256) throw new Error(`Файл набора изменён: ${path.basename(entry.file)}`);
       }
       if (isInstalled) await removeInstallRecord(setGamePath);
-      const backup = path.join(dataPath(), `remove-${crypto.randomUUID()}`);
+      // Backup must live next to the set: Steam and app data can be on
+      // different drives, and Windows cannot rename files across volumes.
+      const backup = path.join(path.dirname(set.target), `.remove-${crypto.randomUUID()}`);
       const moved = [];
       await fs.mkdir(backup, { recursive: true });
       try {
@@ -1166,10 +1168,7 @@ async function activeSetId() {
     const files = slot && slot.files || [];
     return files.length > 0 && files.every(file => fss.existsSync(path.join(slot.dir, file)));
   });
-  const manifests = await readJson(manifestPath(), []);
-  const set = manifests.find(item => item.id === rec.setId);
-  const fileCount = Number.isInteger(rec.fileCount) ? rec.fileCount : (set?.files?.length || 0);
-  return alive && set && set.files.length === fileCount ? String(rec.setId) : null;
+  return alive ? String(rec.setId) : null;
 }
 // Удаление скачанного D2PFX из кэша (освободить место). Безопасно:
 // применённые наборы самодостаточны (копии в pak-slots), файлы в игре не трогаем.
