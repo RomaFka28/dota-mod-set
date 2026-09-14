@@ -1719,7 +1719,6 @@ async function closeGameProc(id) {
     if (!st[id]) return true;
   }
   throw new Error(`${proc.label} не закрывается — закройте вручную через диспетчер задач и повторите`);
-  return true;
 }
 // ── PREFLIGHT-BLOCK-END ──
 // Авто-режим: сами закрываем Dota 2 / Steam перед операциями, пишущими
@@ -1740,10 +1739,9 @@ async function ensureAppsClosed(sendProgress) {
       if (p.id === 'steam') steamWasClosed = true;
       (sendProgress || (() => {}))(`✅ ${p.label} закрыт`);
     } catch (error) {
-      // Steam itself normally does not lock the overlay VPK files. Do not
-      // block installation when Steam refuses to exit; Dota must still close.
-      if (p.id !== 'steam') throw error;
-      (sendProgress || (() => {}))(`⚠ ${p.label} не закрылся — продолжаю установку`);
+      // Do not continue with a partially closed process set. Steam can
+      // relaunch helpers and keep game files locked during the operation.
+      throw error;
     }
   }
   return { steamWasRunning: steamWasClosed };
