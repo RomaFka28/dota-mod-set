@@ -146,13 +146,20 @@ async function removeInstalledMod(id) {
   if (!mod) return;
   if (!state.activeSetId) { toast('Активный набор не найден. Обновите окно приложения после установки модов.', true); return; }
   if (!await confirmStyled(`Удалить «${mod.name}» из текущего набора? Остальные моды останутся.`, { title: 'Удалить мод', okText: 'Удалить' })) return;
+  const button = document.querySelector(`[data-remove-installed="${CSS.escape(id)}"]`);
+  if (button) { button.disabled = true; button.textContent = 'Удаление…'; }
   try {
     const result = await window.mods.removeMod({ setId: state.activeSetId, modId: id });
     state.manifests = state.manifests.map(item => item.id === result.set.id ? result.set : item);
     await refreshInstalled();
     render();
-    toast(`«${mod.name}» убран из сборки и игры. Скачанный файл пока сохранён — его можно удалить отдельной кнопкой «Удалить файл».`);
-  } catch (error) { toast(error.message || 'Не удалось удалить мод', true); }
+    playChime('ok');
+    toast(`«${mod.name}» удалён из сборки и игры. Остальные моды сохранены; скачанный файл оставлен в кэше.`);
+  } catch (error) {
+    playChime('err');
+    if (button) { button.disabled = false; button.textContent = 'Убрать из сборки'; }
+    toast(error.message || 'Не удалось удалить мод', true);
+  }
 }
 function renderCart(conflictEntries = conflictMap()) {
   // Группировка корзины: по герою, а карточки без героя (hero 'Общее') —

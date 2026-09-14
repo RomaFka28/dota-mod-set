@@ -924,17 +924,36 @@ async function removeModFromSet({ setId, modId }) {
       const removed = set.files.filter(file => String(file.modId) === String(modId));
       if (!removed.length) throw new Error('Этот мод не найден в наборе');
       if (removed.length === set.files.length) throw new Error('Последний мод нельзя удалить отдельно — удалите весь набор');
+      const orderedFiles = [...set.files].sort((a, b) => a.slot - b.slot);
+      const removedIndexes = new Set(removed.map(entry => orderedFiles.indexOf(entry)));
       for (const entry of set.files) {
         if (!isSubpath(entry.file, set.target) || !fss.existsSync(entry.file)) throw new Error(`Файл набора пропал: ${path.basename(entry.file)}`);
         if (await hashFile(entry.file) !== entry.sha256) throw new Error(`Файл набора изменён: ${path.basename(entry.file)}`);
       }
-      if (isInstalled) await removeInstallRecord(setGamePath);
       // Backup must live next to the set: Steam and app data can be on
       // different drives, and Windows cannot rename files across volumes.
       const backup = path.join(path.dirname(set.target), `.remove-${crypto.randomUUID()}`);
       const moved = [];
+      const overlayMoved = [];
       await fs.mkdir(backup, { recursive: true });
       try {
+        if (isInstalled) {
+          const record = await readJson(installRecordPath(), null);
+          const installs = record?.installs || (record?.dir ? [{ dir: record.dir, files: record.files || [] }] : []);
+          for (const slot of installs) {
+            if (!slot?.dir || !isTrustedOverlayDir(slot.dir)) throw new Error(`Подозрительная запись прошлой установки (${slot?.dir || 'пустой путь'})`);
+            const names = [...removedIndexes].map(index => slot.files?.[index]).filter(Boolean);
+            if (names.length !== removed.length) throw new Error('Запись установки не соответствует составу набора — переустановите набор целиком');
+            for (const name of names) {
+              if (!/^pak\d+_dir\.vpk$/i.test(name)) throw new Error(`Недопустимое имя файла установки: ${name}`);
+              const source = path.join(path.resolve(slot.dir), name);
+              if (!fss.existsSync(source)) throw new Error(`Файл установки пропал: ${name}`);
+              const target = path.join(backup, `${path.basename(slot.dir)}-${name}`);
+              await fs.rename(source, target);
+              overlayMoved.push({ source, target });
+            }
+          }
+        }
         for (const entry of removed) {
           const backupFile = path.join(backup, path.basename(entry.file));
           await fs.rename(entry.file, backupFile);
@@ -946,10 +965,26 @@ async function removeModFromSet({ setId, modId }) {
           set.hasFonts = false;
           delete set.fontMod;
         }
+        if (isInstalled) {
+          const record = await readJson(installRecordPath(), null);
+          const installs = record?.installs || (record?.dir ? [{ dir: record.dir, files: record.files || [] }] : []);
+          for (const slot of installs)
+            slot.files = slot.files.filter((_, index) => !removedIndexes.has(index));
+          await writeJson(installRecordPath(), {
+            ...record,
+            schema: 2,
+            installs,
+            fontsInstalled: Boolean(record?.fontsInstalled && set.hasFonts),
+            fileCount: set.files.length,
+            setId
+          });
+          if (record?.fontsInstalled && !set.hasFonts) await restoreDefaultFonts(setGamePath);
+        }
         set.updatedAt = new Date().toISOString();
         await writeJson(manifestPath(), manifests);
         return { set, removed: removed.length, wasInstalled: isInstalled };
       } catch (error) {
+        for (const item of overlayMoved) await fs.rename(item.target, item.source).catch(() => {});
         for (const item of moved) await fs.rename(item.backupFile, item.entry.file).catch(() => {});
         throw error;
       } finally { await fs.rm(backup, { recursive: true, force: true }).catch(() => {}); }
