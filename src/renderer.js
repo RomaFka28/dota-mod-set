@@ -31,7 +31,7 @@ const CATEGORIES = [
   ['hero-skins', '🧙', 'Скины героев (прочие)'],
 ];
 const CATEGORY_NAMES = new Map(CATEGORIES.map(([key, , label]) => [key, label]));
-const state = { mods: [], cart: [], category: 'all', hero: 'all', query: '', availability: 'all', settings: null, manifests: [], activeSetId: null, cached: new Set(), installed: new Set(), catalogMode: 'demo' };
+const state = { mods: [], cart: [], category: 'all', hero: 'all', query: '', availability: 'all', settings: null, manifests: [], lastSetId: null, preparedSetMods: new Set(), activeSetId: null, cached: new Set(), installed: new Set(), catalogMode: 'demo' };
 const $ = selector => document.querySelector(selector);
 const escapeHtml = text => String(text ?? '').replace(/[&<>'"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;' }[c]));
 const initials = value => String(value || 'D').split(/[\s-]+/).map(x => x[0]).join('').slice(0, 2).toUpperCase();
@@ -115,7 +115,7 @@ function filteredMods() {
 function renderCatalog(conflictEntries = conflictMap()) {
   const list = filteredMods(); const conflicts = new Set(conflictEntries.flatMap(([, mods]) => mods.map(m => m.id))); const selected = new Set(state.cart.map(m => m.id));
   $('#catalogTitle').textContent = state.hero !== 'all' ? state.hero : categoryName(state.category); $('#catalogDescription').textContent = `${list.length} ${list.length === 1 ? 'мод' : 'модов'} · на карточке указан заменяемый элемент`;
-  $('#modGrid').innerHTML = list.map(mod => { const status = modStatus(mod); const statusBadge = conflicts.has(mod.id) ? '<span class="status conflict">КОНФЛИКТ</span>' : status === 'ready' ? '<span class="status ready">ГОТОВО</span>' : status === 'demo' ? '<span class="status download">ДЕМО</span>' : ''; const inCart = selected.has(mod.id); const inGame = state.installed.has(mod.id); const hasImage = Boolean(mod.previewUrl);   const image = hasImage ? `<img class="preview-image" src="${escapeHtml(mod.previewUrl)}" alt="" loading="lazy" decoding="async" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'">` : ''; const removeInstalled = inGame && state.activeSetId ? `<button class="remove-installed-button" data-remove-installed="${escapeHtml(mod.id)}">Убрать из сборки</button>` : ''; return `<article class="mod-card ${inCart ? 'selected' : ''} ${conflicts.has(mod.id) ? 'conflict' : ''}" data-mid="${escapeHtml(mod.id)}"><div class="preview-wrap">${image}<div class="avatar ${mod.hero === 'Общее' ? 'global' : ''}" style="${hasImage ? 'display:none' : ''}">${initials(mod.hero)}</div></div><div class="card-body"><div class="card-top">${statusBadge}${inGame ? '<span class="status ingame">В ИГРЕ</span>' : ''}</div><div class="card-title">${escapeHtml(mod.name)}</div><div class="card-hero">${escapeHtml(mod.hero)} · ${escapeHtml(categoryName(mod.category))}</div><div class="card-replaces">Заменяет: ${escapeHtml(mod.replaces)}</div><div class="card-footer">${mod.size && mod.size !== '—' ? `<span class="counter">${escapeHtml(mod.size)}</span>` : ''}<div class="card-actions">${status === 'download' ? `<button class="download-button" data-download="${escapeHtml(mod.id)}">Скачать</button>` : ''}${removeInstalled}${mod.source === 'Мастерская' && !inGame ? `<button class="delete-button" data-delws="${escapeHtml(mod.id)}" title="Удалить сборку (VPK, кэш, карточка)">Удалить файл</button>` : (status === 'ready' && !inGame) ? `<button class="delete-button" data-delcache="${escapeHtml(mod.id)}" title="Удалить только скачанный файл из кэша">Удалить файл</button>` : ''}<button class="add-button" data-mod="${escapeHtml(mod.id)}"${inGame && !inCart ? ' disabled title="Уже установлен в игре"' : ''}>${inCart ? 'Убрать' : inGame ? 'В игре' : 'В набор'}</button></div></div></div></article>`; }).join('');
+  $('#modGrid').innerHTML = list.map(mod => { const status = modStatus(mod); const statusBadge = conflicts.has(mod.id) ? '<span class="status conflict">КОНФЛИКТ</span>' : state.preparedSetMods.has(mod.id) ? '<span class="status applied">В НАБОРЕ</span>' : status === 'ready' ? '<span class="status ready">ГОТОВО</span>' : status === 'demo' ? '<span class="status download">ДЕМО</span>' : ''; const inCart = selected.has(mod.id); const inGame = state.installed.has(mod.id); const inPrepared = state.preparedSetMods.has(mod.id); const hasImage = Boolean(mod.previewUrl); const image = hasImage ? `<img class="preview-image" src="${escapeHtml(mod.previewUrl)}" alt="" loading="lazy" decoding="async" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'">` : ''; const removeInstalled = inGame && state.activeSetId ? `<button class="remove-installed-button" data-remove-installed="${escapeHtml(mod.id)}">Убрать из сборки</button>` : ''; return `<article class="mod-card ${inCart ? 'selected' : ''} ${inPrepared ? 'in-prepared' : ''} ${conflicts.has(mod.id) ? 'conflict' : ''}" data-mid="${escapeHtml(mod.id)}"><div class="preview-wrap">${image}<div class="avatar ${mod.hero === 'Общее' ? 'global' : ''}" style="${hasImage ? 'display:none' : ''}">${initials(mod.hero)}</div></div><div class="card-body"><div class="card-top">${statusBadge}${inGame ? '<span class="status ingame">В ИГРЕ</span>' : ''}</div><div class="card-title">${escapeHtml(mod.name)}</div><div class="card-hero">${escapeHtml(mod.hero)} · ${escapeHtml(categoryName(mod.category))}</div><div class="card-replaces">Заменяет: ${escapeHtml(mod.replaces)}</div><div class="card-footer">${mod.size && mod.size !== '—' ? `<span class="counter">${escapeHtml(mod.size)}</span>` : ''}<div class="card-actions">${status === 'download' ? `<button class="download-button" data-download="${escapeHtml(mod.id)}">Скачать</button>` : ''}${removeInstalled}${mod.source === 'Мастерская' && !inGame && !inPrepared ? `<button class="delete-button" data-delws="${escapeHtml(mod.id)}" title="Удалить сборку (VPK, кэш, карточка)">Удалить файл</button>` : (status === 'ready' && !inGame && !inPrepared) ? `<button class="delete-button" data-delcache="${escapeHtml(mod.id)}" title="Удалить только скачанный файл из кэша">Удалить файл</button>` : ''}<button class="add-button" data-mod="${escapeHtml(mod.id)}"${(inGame || inPrepared) && !inCart ? ' disabled title="Уже входит в текущий набор"' : ''}>${inCart ? 'Убрать' : inGame ? 'В игре' : inPrepared ? 'В наборе' : 'В набор'}</button></div></div></div></article>`; }).join('');
   $('#emptyState').classList.toggle('hidden', list.length > 0);
 }
 async function deleteCachedMod(id) {
@@ -151,6 +151,7 @@ async function removeInstalledMod(id) {
   try {
     const result = await window.mods.removeMod({ setId: state.activeSetId, modId: id });
     state.manifests = state.manifests.map(item => item.id === result.set.id ? result.set : item);
+    state.preparedSetMods = new Set(result.set.files.map(file => file.modId).filter(Boolean));
     await refreshInstalled();
     render();
     playChime('ok');
@@ -192,7 +193,7 @@ function renderCart(conflictEntries = conflictMap()) {
     : 'Перед сборкой проверяются конфликты и готовность файлов. Базовый pak01 не изменяется.';
 }
 function render() { const conflicts = conflictMap(); renderCategories(); renderHeroes(); renderCatalog(conflicts); renderCart(conflicts); }
-function toggleCart(id) { const existing = state.cart.findIndex(mod => mod.id === id); if (existing >= 0) state.cart.splice(existing, 1); else { const mod = state.mods.find(x => x.id === id); if (mod) { if (state.installed.has(id)) { toast(`«${mod.name}» уже установлен в игре — в набор не добавляю`); return; } state.cart.push(mod); } } render(); }
+function toggleCart(id) { const existing = state.cart.findIndex(mod => mod.id === id); if (existing >= 0) state.cart.splice(existing, 1); else { const mod = state.mods.find(x => x.id === id); if (mod) { if (state.installed.has(id) || state.preparedSetMods.has(id)) { toast(`«${mod.name}» уже входит в текущий набор — выберите другой мод`); return; } state.cart.push(mod); } } render(); }
 async function refreshCached() {
   state.cached = new Set(await window.mods.cachedIds(state.mods.map(mod => mod.id)));
 }
@@ -228,6 +229,8 @@ async function apply() {
       : await window.mods.apply({ mods: state.cart, gamePath: state.settings.gamePath });
     state.manifests = [manifest, ...state.manifests.filter(item => item.id !== manifest.id)];
     state.lastSetId = manifest.id;
+    state.preparedSetMods = new Set(manifest.files.map(file => file.modId).filter(Boolean));
+    state.cart = [];
     $('#resultTitle').textContent = extending ? `Набор дополнен: ${manifest.files.length} VPK` : `Набор применён: ${manifest.files.length} VPK`;
     $('#resultMessage').textContent = extending
       ? `В набор ${manifest.id} добавлено ${manifest.addedFiles.length} VPK. Старые файлы сохранены, базовый pak01 не изменён.`
@@ -344,13 +347,16 @@ function renderGamePathStatus() {
 }
 async function showHistory() {
   [state.manifests, state.activeSetId] = await Promise.all([window.mods.installed(), window.mods.activeSetId()]);
+  const prepared = state.manifests.filter(set => set.state === 'applied').sort((a, b) => String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt)))[0] || null;
+  state.lastSetId = prepared?.id || null;
+  state.preparedSetMods = new Set(prepared?.files?.map(file => file.modId).filter(Boolean) || []);
   const list = $('#historyList');
   list.innerHTML = state.manifests.length ? state.manifests.map(set => {
     const active = set.state === 'applied' && set.id === state.activeSetId;
     const actions = set.state !== 'applied' ? '' : active
       ? `<span class="history-actions"><button class="install-game" disabled title="Этот набор уже находится в игре">Уже в игре</button><button class="clear-set" data-clear-set="${escapeHtml(set.id)}">Убрать из игры</button></span>`
       : `<span class="history-actions"><button class="install-game" data-install="${escapeHtml(set.id)}">Установить в игру</button><button class="rollback" data-rollback="${escapeHtml(set.id)}">Удалить набор</button></span>`;
-    const status = active ? 'в игре' : set.state === 'applied' ? 'готов' : set.state;
+    const status = active ? 'в игре' : set.state === 'applied' ? 'готов — не установлен' : set.state;
     return `<article class="history-item"><div class="history-row"><div><div class="history-name">${escapeHtml(set.id)}</div><div class="history-meta">${new Date(set.createdAt).toLocaleString('ru-RU')} · ${set.files.length} VPK · ${escapeHtml(status)}</div></div>${actions}</div></article>`;
   }).join('') : '<div class="empty">Наборов в истории ещё нет.</div>';
   document.querySelectorAll('[data-rollback]').forEach(button => button.onclick = async () => {
@@ -372,7 +378,7 @@ async function boot() {
     $('#notice').textContent = 'Не удалось загрузить системный мост Electron. Закройте окно, запустите приложение через «npm start» из папки проекта и убедитесь, что открывается не index.html в браузере.';
     return;
   }
-  try { const [catalog, settings, manifests, activeSetId] = await Promise.all([window.mods.catalog(), window.mods.settings(), window.mods.installed(), window.mods.activeSetId()]); state.mods = catalog.mods; state.settings = settings; state.manifests = manifests; state.lastSetId = manifests.find(set => set.state === 'applied')?.id || null; state.activeSetId = activeSetId; state.catalogMode = catalog.mode; state.installed = new Set(catalog.installedModIds || []); $('#catalogMode').textContent = catalog.mode === 'online' ? 'D2PFX: онлайн' : catalog.mode === 'cache' ? 'D2PFX: локальный кэш' : 'Демо-каталог (офлайн)'; await refreshCached(); render(); if (catalog.mode !== 'online') { $('#notice').classList.remove('hidden'); $('#notice').textContent = catalog.mode === 'cache' ? 'Источник сейчас недоступен — показан сохранённый каталог D2PFX. Проверьте интернет (должен открываться raw.githubusercontent.com) или включите VPN, затем нажмите ↻ внизу слева.' : 'Источник сейчас недоступен и кэш пуст — показан демо-каталог. Карточки без ссылки нельзя скачать.'; } } catch (error) { toast(error.message, true); }
+  try { const [catalog, settings, manifests, activeSetId] = await Promise.all([window.mods.catalog(), window.mods.settings(), window.mods.installed(), window.mods.activeSetId()]); state.mods = catalog.mods; state.settings = settings; state.manifests = manifests; const prepared = manifests.filter(set => set.state === 'applied').sort((a, b) => String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt)))[0] || null; state.lastSetId = prepared?.id || null; state.preparedSetMods = new Set(prepared?.files?.map(file => file.modId).filter(Boolean) || []); state.activeSetId = activeSetId; state.catalogMode = catalog.mode; state.installed = new Set(catalog.installedModIds || []); $('#catalogMode').textContent = catalog.mode === 'online' ? 'D2PFX: онлайн' : catalog.mode === 'cache' ? 'D2PFX: локальный кэш' : 'Демо-каталог (офлайн)'; await refreshCached(); render(); if (catalog.mode !== 'online') { $('#notice').classList.remove('hidden'); $('#notice').textContent = catalog.mode === 'cache' ? 'Источник сейчас недоступен — показан сохранённый каталог D2PFX. Проверьте интернет (должен открываться raw.githubusercontent.com) или включите VPN, затем нажмите ↻ внизу слева.' : 'Источник сейчас недоступен и кэш пуст — показан демо-каталог. Карточки без ссылки нельзя скачать.'; } } catch (error) { toast(error.message, true); }
 }
 // Карточка крупно: большое фото + всё описание + действия.
 // Клик по карточке (мимо кнопок) открывает, кнопки внутри работают как раньше.
