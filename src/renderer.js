@@ -425,6 +425,9 @@ document.getElementById('confirmDialog').addEventListener('close', () => { if (_
 $('#searchInput').oninput = event => { state.query = event.target.value; renderCatalog(); };
 document.querySelectorAll('[data-availability]').forEach(button => button.onclick = () => { state.availability = button.dataset.availability; document.querySelectorAll('[data-availability]').forEach(item => item.classList.toggle('active', item === button)); render(); });
 $('#clearCart').onclick = async () => { if (!state.cart.length) return; if (!await confirmStyled('Очистить корзину? Набранные моды придётся добавлять заново.', { title: 'Очистить корзину', okText: 'Очистить', danger: false })) return; state.cart = []; render(); }; $('#applyButton').onclick = apply; $('#settingsButton').onclick = openSettings; $('#historyButton').onclick = showHistory; $('#refreshCatalog').onclick = refreshCatalog; $('#sourceButton').onclick = () => window.mods.openSource(); $('#appRepositoryButton').onclick = () => window.mods.openAppRepository();
+$('#optimizationButton').onclick = () => $('#optimizationDialog').showModal();
+$('#optimizationOpen').onclick = () => window.workshop.openUrl('https://github.com/Egezenn/dota2-minify').catch(error => toast(error.message, true));
+$('#optimizationDocs').onclick = () => window.workshop.openUrl('https://egezenn.github.io/dota2-minify').catch(error => toast(error.message, true));
 $('#gamePathInput').addEventListener('keydown', e => {
   // form method=dialog: Enter в поле пути молча закрывал настройки без
   // сохранения. Давим дефолт и идём через обычное сохранение.

@@ -134,6 +134,7 @@ input[type=color]#wsColor{width:46px;height:36px;border:1px solid var(--line);bo
 .cart-footer{padding-top:15px}
 .primary-button{transition:transform .15s,filter .15s}
 .primary-button:not(:disabled):hover{filter:brightness(1.08);transform:translateY(-1px)}
+.optimization-warning{margin:16px 0;padding:11px 12px;border:1px solid rgba(246,184,90,.35);background:rgba(246,184,90,.08);border-radius:8px;color:#f5ce86;font-size:12px;line-height:1.5}
 @media(max-width:1160px){.layout{grid-template-columns:200px minmax(440px,1fr) 300px}.catalog{padding:27px 22px}.mod-grid{grid-template-columns:repeat(auto-fill,minmax(205px,1fr))}}
 
 /* Window chrome and navigation alignment. */
