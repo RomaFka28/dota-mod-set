@@ -191,5 +191,42 @@ input,textarea,select,[contenteditable="true"]{
 }
 .category-list::-webkit-scrollbar-thumb:hover,.hero-list::-webkit-scrollbar-thumb:hover,.cart-list::-webkit-scrollbar-thumb:hover,
 .ws-results::-webkit-scrollbar-thumb:hover,.ws-log::-webkit-scrollbar-thumb:hover,.history-list::-webkit-scrollbar-thumb:hover{background:#6084aa}
-@media(max-width:1160px){.topbar{padding-left:238px;padding-right:150px}}
-@media(max-width:900px){.topbar{padding-left:25px;padding-right:150px}}
+/* Final window layout: centered title, actions on the left, status in the lower-right. */
+.topbar{position:relative;padding:0 150px 0 25px}
+.brand{position:absolute;left:50%;transform:translateX(-50%);white-space:nowrap}
+.top-actions{position:absolute;left:18px;top:0;height:62px;padding-right:0}
+.source-button{position:fixed;right:125px;bottom:7px;z-index:20;padding:3px 5px;font-size:11px}
+.sidebar-foot{
+  position:fixed;
+  right:10px;
+  bottom:6px;
+  left:auto;
+  z-index:21;
+  width:auto;
+  padding:0;
+  border:0;
+  pointer-events:none;
+}
+.sidebar-foot #catalogMode{
+  display:block;
+  position:fixed;
+  right:15px;
+  bottom:7px;
+  max-width:none;
+  color:#8190a5;
+  text-align:right;
+  pointer-events:none;
+}
+.sidebar-foot .dot{position:fixed;right:7px;bottom:13px;margin:0}
+.sidebar-foot #refreshCatalog{display:none}
+.sidebar{padding-bottom:25px}
+.category-list,.hero-list,.cart-list,.ws-results,.ws-log,.history-list,.sidebar,.catalog,.cart-panel{
+  scrollbar-color:#45617f #101a28;
+}
+*{scrollbar-width:auto}
+*::-webkit-scrollbar{width:10px;height:10px}
+*::-webkit-scrollbar-track{background:#101a28;border-radius:10px}
+*::-webkit-scrollbar-thumb{background:#45617f;border:2px solid #101a28;border-radius:10px}
+*::-webkit-scrollbar-thumb:hover{background:#6084aa}
+@media(max-width:1160px){.topbar{padding-left:25px;padding-right:150px}}
+@media(max-width:900px){.topbar{padding-left:25px;padding-right:150px}.brand{left:50%;font-size:12px}.brand .pill{display:none}}
