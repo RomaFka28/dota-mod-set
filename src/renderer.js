@@ -162,8 +162,14 @@ function renderCart(conflictEntries = conflictMap()) {
   const hasDemo = state.cart.some(mod => !state.cached.has(mod.id) && !mod.downloadUrl);
   const applyBtn = $('#applyButton');
   applyBtn.disabled = !state.cart.length || Boolean(conflictCount) || hasDemo;
-  applyBtn.innerHTML = missing ? `Скачать и применить <span>→</span>` : `Применить набор <span>→</span>`;
+  const extending = Boolean(state.lastSetId);
+  applyBtn.innerHTML = extending
+    ? (missing ? `Скачать и добавить <span>→</span>` : `Добавить к набору <span>→</span>`)
+    : (missing ? `Скачать и применить <span>→</span>` : `Применить набор <span>→</span>`);
   applyBtn.title = hasDemo ? 'В наборе есть демо-карточки без ссылки на скачивание — уберите их' : '';
+  $('#setActionHint').textContent = extending
+    ? 'Новые моды добавятся к последнему подготовленному набору. Старые VPK останутся на месте.'
+    : 'Перед сборкой проверяются конфликты и готовность файлов. Базовый pak01 не изменяется.';
 }
 function render() { const conflicts = conflictMap(); renderCategories(); renderHeroes(); renderCatalog(conflicts); renderCart(conflicts); }
 function toggleCart(id) { const existing = state.cart.findIndex(mod => mod.id === id); if (existing >= 0) state.cart.splice(existing, 1); else { const mod = state.mods.find(x => x.id === id); if (mod) { if (state.installed.has(id)) { toast(`«${mod.name}» уже установлен в игре — в набор не добавляю`); return; } state.cart.push(mod); } } render(); }
@@ -196,11 +202,16 @@ async function apply() {
   try {
     const missing = state.cart.filter(mod => !state.cached.has(mod.id));
     if (missing.length) await downloadMissing();
-    const manifest = await window.mods.apply({ mods: state.cart, gamePath: state.settings.gamePath });
-    state.manifests.unshift(manifest);
+    const extending = Boolean(state.lastSetId);
+    const manifest = extending
+      ? await window.mods.extend({ setId: state.lastSetId, mods: state.cart, gamePath: state.settings.gamePath })
+      : await window.mods.apply({ mods: state.cart, gamePath: state.settings.gamePath });
+    state.manifests = [manifest, ...state.manifests.filter(item => item.id !== manifest.id)];
     state.lastSetId = manifest.id;
-    $('#resultTitle').textContent = `Набор применён: ${manifest.files.length} VPK`;
-    $('#resultMessage').textContent = `Создан изолированный набор ${manifest.id}. Файлы скопированы, базовый pak01 не изменён. Статус: ${manifest.state}.`;
+    $('#resultTitle').textContent = extending ? `Набор дополнен: ${manifest.files.length} VPK` : `Набор применён: ${manifest.files.length} VPK`;
+    $('#resultMessage').textContent = extending
+      ? `В набор ${manifest.id} добавлено ${manifest.addedFiles.length} VPK. Старые файлы сохранены, базовый pak01 не изменён.`
+      : `Создан изолированный набор ${manifest.id}. Файлы скопированы, базовый pak01 не изменён. Статус: ${manifest.state}.`;
     $('#resultPath').textContent = manifest.target;
     $('#resultFiles').innerHTML = manifest.files.map(f => `<li>${escapeHtml(f.modName)} → ${escapeHtml(f.file.split(/[\\/]/).pop())}</li>`).join('');
     $('#resultOpenFolder').onclick = () => window.mods.openFolder(manifest.target).catch(e => toast(e.message, true));
@@ -210,6 +221,7 @@ async function apply() {
     installBtn.onclick = () => installLastSet();
     $('#resultDialog').showModal();
     playChime('ok');
+    state.cart = [];
     render();
   } catch (error) { playChime('err'); toast(error.message || 'Не удалось применить набор', true); button.innerHTML = original; button.disabled = false; return; }
   button.innerHTML = original; render();
@@ -319,7 +331,7 @@ async function showHistory() {
   }).join('') : '<div class="empty">Наборов в истории ещё нет.</div>';
   document.querySelectorAll('[data-rollback]').forEach(button => button.onclick = async () => {
     if (!await confirmStyled('Удалить подготовленный набор и его запись из истории? После этого его нужно будет собрать заново.', { title: 'Удалить набор', okText: 'Удалить' })) return;
-    try { const result = await window.mods.rollback(button.dataset.rollback); await refreshInstalled(); render(); toast(result.failed?.length ? `Удаление частичное: занято файлов ${result.failed.length}` : 'Набор удалён из истории'); showHistory(); } catch (error) { toast(error.message, true); }
+    try { const result = await window.mods.rollback(button.dataset.rollback); if (state.lastSetId === button.dataset.rollback) state.lastSetId = null; await refreshInstalled(); render(); toast(result.failed?.length ? `Удаление частичное: занято файлов ${result.failed.length}` : 'Набор удалён из истории'); showHistory(); } catch (error) { toast(error.message, true); }
   });
   document.querySelectorAll('[data-clear-set]').forEach(button => button.onclick = async () => {
     if (!await confirmStyled('Убрать активные VPK этого набора из игры? Сам набор останется в истории и его можно будет установить снова.', { title: 'Убрать из игры', okText: 'Убрать', danger: false })) return;
@@ -336,7 +348,7 @@ async function boot() {
     $('#notice').textContent = 'Не удалось загрузить системный мост Electron. Закройте окно, запустите приложение через «npm start» из папки проекта и убедитесь, что открывается не index.html в браузере.';
     return;
   }
-  try { const [catalog, settings, manifests] = await Promise.all([window.mods.catalog(), window.mods.settings(), window.mods.installed()]); state.mods = catalog.mods; state.settings = settings; state.manifests = manifests; state.catalogMode = catalog.mode; state.installed = new Set(catalog.installedModIds || []); $('#catalogMode').textContent = catalog.mode === 'online' ? 'D2PFX: онлайн' : catalog.mode === 'cache' ? 'D2PFX: локальный кэш' : 'Демо-каталог (офлайн)'; await refreshCached(); render(); if (catalog.mode !== 'online') { $('#notice').classList.remove('hidden'); $('#notice').textContent = catalog.mode === 'cache' ? 'Источник сейчас недоступен — показан сохранённый каталог D2PFX. Проверьте интернет (должен открываться raw.githubusercontent.com) или включите VPN, затем нажмите ↻ внизу слева.' : 'Источник сейчас недоступен и кэш пуст — показан демо-каталог. Карточки без ссылки нельзя скачать.'; } } catch (error) { toast(error.message, true); }
+  try { const [catalog, settings, manifests] = await Promise.all([window.mods.catalog(), window.mods.settings(), window.mods.installed()]); state.mods = catalog.mods; state.settings = settings; state.manifests = manifests; state.lastSetId = manifests.find(set => set.state === 'applied')?.id || null; state.catalogMode = catalog.mode; state.installed = new Set(catalog.installedModIds || []); $('#catalogMode').textContent = catalog.mode === 'online' ? 'D2PFX: онлайн' : catalog.mode === 'cache' ? 'D2PFX: локальный кэш' : 'Демо-каталог (офлайн)'; await refreshCached(); render(); if (catalog.mode !== 'online') { $('#notice').classList.remove('hidden'); $('#notice').textContent = catalog.mode === 'cache' ? 'Источник сейчас недоступен — показан сохранённый каталог D2PFX. Проверьте интернет (должен открываться raw.githubusercontent.com) или включите VPN, затем нажмите ↻ внизу слева.' : 'Источник сейчас недоступен и кэш пуст — показан демо-каталог. Карточки без ссылки нельзя скачать.'; } } catch (error) { toast(error.message, true); }
 }
 // Карточка крупно: большое фото + всё описание + действия.
 // Клик по карточке (мимо кнопок) открывает, кнопки внутри работают как раньше.

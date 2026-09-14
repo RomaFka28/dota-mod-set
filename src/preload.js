@@ -1,7 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('mods', {
   catalog: () => ipcRenderer.invoke('catalog:get'), settings: () => ipcRenderer.invoke('settings:get'), saveSettings: value => ipcRenderer.invoke('settings:save', value), addCatalogSource: url => ipcRenderer.invoke('catalog:add-source', url), removeCatalogSource: url => ipcRenderer.invoke('catalog:remove-source', url),
-  download: mod => ipcRenderer.invoke('mod:download', mod), cached: id => ipcRenderer.invoke('mod:cached', id), apply: payload => ipcRenderer.invoke('set:apply', payload),
+  download: mod => ipcRenderer.invoke('mod:download', mod), cached: id => ipcRenderer.invoke('mod:cached', id), apply: payload => ipcRenderer.invoke('set:apply', payload), extend: payload => ipcRenderer.invoke('set:extend', payload),
   installed: () => ipcRenderer.invoke('sets:list'), activeSetId: () => ipcRenderer.invoke('set:active-id'), rollback: id => ipcRenderer.invoke('set:rollback', id), purgeHistory: () => ipcRenderer.invoke('sets:purge'), chooseGameFolder: () => ipcRenderer.invoke('dialog:game-folder'), openFolder: folder => ipcRenderer.invoke('set:open-folder', folder), openSource: () => ipcRenderer.invoke('source:open'), openAppRepository: () => ipcRenderer.invoke('app-repository:open'),
   installGame: setId => ipcRenderer.invoke('set:install-game', setId), clearGame: () => ipcRenderer.invoke('set:clear-game'),
   deleteWorkshop: modId => ipcRenderer.invoke('workshop:delete-mod', modId),

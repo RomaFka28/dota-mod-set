@@ -810,6 +810,49 @@ async function applySet({ mods, gamePath }) {
   finally { await fs.rm(temp, { recursive: true, force: true }).catch(() => {}); }
   });
 }
+async function extendSet({ setId, mods, gamePath }) {
+  return withCatalogLock(async () => {
+    if (!setId || !Array.isArray(mods) || !mods.length) throw new Error('Выберите хотя бы один новый мод');
+    const manifests = await readJson(manifestPath(), []);
+    const manifest = manifests.find(item => item.id === setId && item.state === 'applied');
+    if (!manifest) throw new Error('Текущий набор больше недоступен — соберите новый набор');
+    const resolvedGamePath = path.resolve(gamePath || manifest.gamePath || (await settings()).gamePath);
+    if (path.resolve(manifest.gamePath || resolvedGamePath) !== resolvedGamePath) throw new Error('Путь к игре изменился — выберите текущий набор заново');
+    if (!isSubpath(manifest.target, gameModRoot(resolvedGamePath))) throw new Error('Папка набора находится вне защищённой папки приложения');
+    for (const entry of manifest.files) {
+      if (!isSubpath(entry.file, manifest.target) || !fss.existsSync(entry.file) || await hashFile(entry.file) !== entry.sha256)
+        throw new Error(`Файл текущего набора изменён или пропал: ${path.basename(entry.file)}`);
+    }
+    const existingIds = new Set(manifest.files.map(file => file.modId).filter(Boolean));
+    const duplicate = mods.find(mod => existingIds.has(mod.id));
+    if (duplicate) throw new Error(`«${duplicate.name}» уже есть в текущем наборе`);
+    const temp = path.join(dataPath(), `transaction-${crypto.randomUUID()}`);
+    const added = [];
+    await fs.mkdir(temp, { recursive: true });
+    try {
+      const files = [];
+      for (const mod of mods) for (const vpk of await prepareVpk(mod, temp)) files.push({ mod, vpk });
+      if (!files.length) throw new Error('Нет готовых VPK для добавления');
+      const maxSlot = manifest.files.reduce((max, file) => Math.max(max, Number(file.slot) || 0), 0);
+      for (let index = 0; index < files.length; index++) {
+        const item = files[index];
+        const slot = maxSlot + index + 1;
+        const name = `pak${String(slot).padStart(3, '0')}_${safeId(item.mod.id)}.vpk`;
+        const destination = path.join(manifest.target, name);
+        await fs.copyFile(item.vpk, destination, fss.constants.COPYFILE_EXCL);
+        added.push({ file: destination, sha256: await hashFile(destination), modId: item.mod.id, modName: item.mod.name, slot });
+      }
+      manifest.files.push(...added);
+      manifest.updatedAt = new Date().toISOString();
+      await writeJson(manifestPath(), manifests);
+      return { ...manifest, addedFiles: added };
+    } catch (error) {
+      for (const entry of added)
+        if (fss.existsSync(entry.file) && await hashFile(entry.file).catch(() => null) === entry.sha256) await fs.rm(entry.file).catch(() => {});
+      throw error;
+    } finally { await fs.rm(temp, { recursive: true, force: true }).catch(() => {}); }
+  });
+}
 async function rollback(setId) {
   const rec = await readJson(installRecordPath(), null);
   const isInstalled = Boolean(rec && rec.setId === setId);
@@ -1040,7 +1083,7 @@ async function installSetToGameInner(setId) {
   }
 
   // Новый формат записи: {schema:2, installs:[{dir,files}], fontsInstalled, setId}
-  await writeJson(installRecordPath(), { schema: 2, installs, fontsInstalled, setId });
+  await writeJson(installRecordPath(), { schema: 2, installs, fontsInstalled, setId, fileCount: files.length });
   const prevDirChanged = Boolean(prevRec && (prevRec.dir || (prevRec.installs || [])[0]?.dir) &&
     !installs.some(s => path.resolve(s.dir) === path.resolve(prevRec.dir || (prevRec.installs || [])[0]?.dir || '')));
   return { dirs: langDirs.map(d => path.basename(d)), files: installs[0]?.files.map(f => ({ name: f, modName: '' })) || [], prevDirChanged, fontsInstalled };
@@ -1066,7 +1109,8 @@ async function installedModIds() {
   const manifests = await readJson(manifestPath(), []);
   const set = manifests.find(x => x.id === rec.setId);
   if (!set) return [];
-  return [...new Set((set.files || []).map(f => f.modId).filter(Boolean))];
+  const fileCount = Number.isInteger(rec.fileCount) ? rec.fileCount : set.files.length;
+  return [...new Set(set.files.slice(0, fileCount).map(f => f.modId).filter(Boolean))];
 }
 async function activeSetId() {
   const rec = await readJson(installRecordPath(), null);
@@ -1076,7 +1120,10 @@ async function activeSetId() {
     const files = slot && slot.files || [];
     return files.length > 0 && files.every(file => fss.existsSync(path.join(slot.dir, file)));
   });
-  return alive ? String(rec.setId) : null;
+  const manifests = await readJson(manifestPath(), []);
+  const set = manifests.find(item => item.id === rec.setId);
+  const fileCount = Number.isInteger(rec.fileCount) ? rec.fileCount : (set?.files?.length || 0);
+  return alive && set && set.files.length === fileCount ? String(rec.setId) : null;
 }
 // Удаление скачанного D2PFX из кэша (освободить место). Безопасно:
 // применённые наборы самодостаточны (копии в pak-slots), файлы в игре не трогаем.
@@ -2247,6 +2294,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('mod:cached', async (_, id) => Boolean(await findCachedFile(id)));
   ipcMain.handle('mods:cached-ids', async (_, ids) => findCachedIds(ids));
   ipcMain.handle('set:apply', async (_, payload) => applySet(payload));
+  ipcMain.handle('set:extend', async (_, payload) => extendSet(payload));
   ipcMain.handle('sets:list', () => readJson(manifestPath(), []));
   ipcMain.handle('set:active-id', activeSetId);
   ipcMain.handle('set:rollback', async (_, id) => rollback(id));
