@@ -2263,7 +2263,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('app-repository:open', () => shell.openExternal(APP_REPOSITORY));
   // Workshop IPC
   ipcMain.handle('workshop:tool-status', async (_, gamePath) => workshopToolStatus(gamePath));
-  const SAFE_OPEN_HOSTS = new Set(['store.steampowered.com', 'steamcommunity.com', 'dotnet.microsoft.com', 'github.com', 'egezenn.github.io']);
+  const SAFE_OPEN_HOSTS = new Set(['store.steampowered.com', 'steamcommunity.com', 'dotnet.microsoft.com', 'github.com']);
   ipcMain.handle('workshop:open-url', async (_, url) => {
     let u;
     try { u = new URL(String(url || '')); } catch { throw new Error('Некорректная ссылка'); }
