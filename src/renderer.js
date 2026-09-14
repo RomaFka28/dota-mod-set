@@ -111,8 +111,8 @@ function filteredMods() {
     return matchesScope && matchesText && matchesAvailability(mod);
   });
 }
-function renderCatalog() {
-  const list = filteredMods(); const conflicts = new Set(conflictMap().flatMap(([, mods]) => mods.map(m => m.id))); const selected = new Set(state.cart.map(m => m.id));
+function renderCatalog(conflictEntries = conflictMap()) {
+  const list = filteredMods(); const conflicts = new Set(conflictEntries.flatMap(([, mods]) => mods.map(m => m.id))); const selected = new Set(state.cart.map(m => m.id));
   $('#catalogTitle').textContent = state.hero !== 'all' ? state.hero : categoryName(state.category); $('#catalogDescription').textContent = `${list.length} ${list.length === 1 ? 'мод' : 'модов'} · на карточке указан заменяемый элемент`;
   $('#modGrid').innerHTML = list.map(mod => { const status = modStatus(mod); const statusBadge = conflicts.has(mod.id) ? '<span class="status conflict">КОНФЛИКТ</span>' : status === 'ready' ? '<span class="status ready">ГОТОВО</span>' : status === 'demo' ? '<span class="status download">ДЕМО</span>' : ''; const inCart = selected.has(mod.id); const hasImage = Boolean(mod.previewUrl);   const image = hasImage ? `<img class="preview-image" src="${escapeHtml(mod.previewUrl)}" alt="" loading="lazy" decoding="async" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'">` : ''; return `<article class="mod-card ${inCart ? 'selected' : ''} ${conflicts.has(mod.id) ? 'conflict' : ''}" data-mid="${escapeHtml(mod.id)}"><div class="preview-wrap">${image}<div class="avatar ${mod.hero === 'Общее' ? 'global' : ''}" style="${hasImage ? 'display:none' : ''}">${initials(mod.hero)}</div></div><div class="card-body"><div class="card-top">${statusBadge}${state.installed.has(mod.id) ? '<span class="status ingame">В ИГРЕ ✓</span>' : ''}</div><div class="card-title">${escapeHtml(mod.name)}</div><div class="card-hero">${escapeHtml(mod.hero)} · ${escapeHtml(categoryName(mod.category))}</div><div class="card-replaces">Заменяет: ${escapeHtml(mod.replaces)}</div><div class="card-footer">${mod.size && mod.size !== '—' ? `<span class="counter">${escapeHtml(mod.size)}</span>` : ''}<div class="card-actions">${status === 'download' ? `<button class="download-button" data-download="${escapeHtml(mod.id)}">Скачать</button>` : ''}${mod.source === 'Мастерская' && !state.installed.has(mod.id) ? `<button class="delete-button" data-delws="${escapeHtml(mod.id)}" title="Удалить сборку (VPK, кэш, карточка)">🗑</button>` : (status === 'ready' && !state.installed.has(mod.id)) ? `<button class="delete-button" data-delcache="${escapeHtml(mod.id)}" title="Удалить скачанный файл из кэша">🗑</button>` : ''}<button class="add-button" data-mod="${escapeHtml(mod.id)}"${state.installed.has(mod.id) && !inCart ? ' disabled title="Уже установлен в игре"' : ''}>${inCart ? 'Убрать' : state.installed.has(mod.id) ? 'В игре ✓' : 'В набор'}</button></div></div></div></article>`; }).join('');
   $('#emptyState').classList.toggle('hidden', list.length > 0);
@@ -140,18 +140,18 @@ async function deleteWorkshopMod(id) {
     await refreshCatalog();
   } catch (e) { playChime('err'); toast(e.message || 'Не удалось удалить', true); }
 }
-function renderCart() {
+function renderCart(conflictEntries = conflictMap()) {
   // Группировка корзины: по герою, а карточки без героя (hero 'Общее') —
 // по своему разделу каталога, чтобы курьер не лежал в куче с эффектами.
   const cartGroup = mod => (mod.hero && mod.hero !== 'Общее') ? mod.hero : categoryName(mod.category);
   const groups = new Map(); state.cart.forEach(mod => { const key = cartGroup(mod); const values = groups.get(key) || []; values.push(mod); groups.set(key, values); });
-  const conflictCount = conflictMap().length; $('#cartCount').textContent = state.cart.length; $('#readyCount').textContent = `${state.cart.filter(m => state.cached.has(m.id)).length} / ${state.cart.length}`;
+  const conflictCount = conflictEntries.length; $('#cartCount').textContent = state.cart.length; $('#readyCount').textContent = `${state.cart.filter(m => state.cached.has(m.id)).length} / ${state.cart.length}`;
   $('#cartList').innerHTML = state.cart.length ? [...groups.entries()].map(([hero, mods]) => `<section class="cart-group"><div class="group-title">${escapeHtml(hero).toUpperCase()}</div>${mods.map(mod => `<div class="cart-item"><div><div class="cart-item-name">${escapeHtml(mod.name)}</div><div class="cart-item-meta">${escapeHtml(mod.replaces)}</div></div><button class="remove" data-remove="${escapeHtml(mod.id)}" title="Убрать из набора">×</button></div>`).join('')}</section>`).join('') : `<div class="cart-empty"><span>＋</span><p>Набор пока пуст</p><small>Нажмите «В набор» на карточке мода, чтобы начать.</small></div>`;
   document.querySelectorAll('[data-remove]').forEach(button => button.onclick = () => toggleCart(button.dataset.remove));
   const conflicts = $('#conflicts');
   conflicts.classList.toggle('hidden', !conflictCount);
   conflicts.innerHTML = conflictCount
-    ? `<b>Конфликт${conflictCount === 1 ? '' : 'ы'}: ${conflictCount}</b><ul>${conflictMap().map(([key, mods]) =>
+    ? `<b>Конфликт${conflictCount === 1 ? '' : 'ы'}: ${conflictCount}</b><ul>${conflictEntries.map(([key, mods]) =>
       `<li><span>${escapeHtml(key.replace(/^(hero|global|workshop):/, ''))}</span>: ${mods.map(mod => escapeHtml(mod.name)).join(' · ')}</li>`
     ).join('')}</ul><small>Оставьте один мод для каждого слота.</small>`
     : '';
@@ -164,7 +164,7 @@ function renderCart() {
   applyBtn.innerHTML = missing ? `Скачать и применить <span>→</span>` : `Применить набор <span>→</span>`;
   applyBtn.title = hasDemo ? 'В наборе есть демо-карточки без ссылки на скачивание — уберите их' : '';
 }
-function render() { renderCategories(); renderHeroes(); renderCatalog(); renderCart(); }
+function render() { const conflicts = conflictMap(); renderCategories(); renderHeroes(); renderCatalog(conflicts); renderCart(conflicts); }
 function toggleCart(id) { const existing = state.cart.findIndex(mod => mod.id === id); if (existing >= 0) state.cart.splice(existing, 1); else { const mod = state.mods.find(x => x.id === id); if (mod) { if (state.installed.has(id)) { toast(`«${mod.name}» уже установлен в игре — в набор не добавляю`); return; } state.cart.push(mod); } } render(); }
 async function refreshCached() {
   state.cached = new Set(await window.mods.cachedIds(state.mods.map(mod => mod.id)));
