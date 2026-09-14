@@ -148,7 +148,13 @@ function renderCart() {
   const conflictCount = conflictMap().length; $('#cartCount').textContent = state.cart.length; $('#readyCount').textContent = `${state.cart.filter(m => state.cached.has(m.id)).length} / ${state.cart.length}`;
   $('#cartList').innerHTML = state.cart.length ? [...groups.entries()].map(([hero, mods]) => `<section class="cart-group"><div class="group-title">${escapeHtml(hero).toUpperCase()}</div>${mods.map(mod => `<div class="cart-item"><div><div class="cart-item-name">${escapeHtml(mod.name)}</div><div class="cart-item-meta">${escapeHtml(mod.replaces)}</div></div><button class="remove" data-remove="${escapeHtml(mod.id)}" title="Убрать из набора">×</button></div>`).join('')}</section>`).join('') : `<div class="cart-empty"><span>＋</span><p>Набор пока пуст</p><small>Нажмите «В набор» на карточке мода, чтобы начать.</small></div>`;
   document.querySelectorAll('[data-remove]').forEach(button => button.onclick = () => toggleCart(button.dataset.remove));
-  const conflicts = $('#conflicts'); conflicts.classList.toggle('hidden', !conflictCount); conflicts.innerHTML = conflictCount ? `<b>Конфликт ${conflictCount}</b><br>Несколько модов заменяют один и тот же слот. Уберите один из каждой пары перед применением.` : '';
+  const conflicts = $('#conflicts');
+  conflicts.classList.toggle('hidden', !conflictCount);
+  conflicts.innerHTML = conflictCount
+    ? `<b>Конфликт${conflictCount === 1 ? '' : 'ы'}: ${conflictCount}</b><ul>${conflictMap().map(([key, mods]) =>
+      `<li><span>${escapeHtml(key.replace(/^(hero|global|workshop):/, ''))}</span>: ${mods.map(mod => escapeHtml(mod.name)).join(' · ')}</li>`
+    ).join('')}</ul><small>Оставьте один мод для каждого слота.</small>`
+    : '';
   const missing = state.cart.filter(mod => !state.cached.has(mod.id)).length;
   // DEMO-карточки (нет downloadUrl и не в кэше) скачать нельзя — кнопка
   // блокируется сразу, а не падает в downloadMissing посреди применения.
@@ -171,16 +177,6 @@ async function downloadMissing() {
   const failed = [];
   for (const mod of missing) {
   try {
-    // Набор могли откатить (или применить в другом запуске — exe и npm хранят
-    // данные в разных папках), а кнопка осталась от старого диалога. Сверяемся
-    // со свежим списком ДО вызова, чтобы дать понятный текст вместо трейса.
-    state.manifests = await window.mods.installed();
-    const set = state.manifests.find(m => m.id === state.lastSetId);
-    if (!set || set.state !== 'applied') {
-      toast('Этот набор уже откачен или применён в другом запуске — нажмите «Применить набор» заново, затем «Установить в игру»', true);
-      $('#applyButton').textContent = 'Набор не применён';
-      return; // кнопка остаётся disabled — жать больше нечего
-    }
       toast(`Скачивание: ${mod.name}`);
       const result = await window.mods.download(mod);
       state.cached.add(mod.id);
