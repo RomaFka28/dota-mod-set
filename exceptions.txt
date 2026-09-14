@@ -1,0 +1,12 @@
+---------------
+File: C:\Users\Administrator\AppData\Local\Temp\opencode\facefix\frostivus2018_invoker_keeper_of_magic_head_frostivus2018_invoker_keeper_of_magic_head.dmx
+Exception: ValveResourceFormat.Utils.UnexpectedMagicException: Unexpected header. You likely tried to read a file that is not actually a resource (usually ends in '_c'). for variable 'HeaderVersion': 25632 (0x6420)
+   at ValveResourceFormat.Resource.Read(Stream input, Boolean verifyFileSize, Boolean leaveOpen) in /_/ValveResourceFormat/Resource/Resource.cs:line 199
+   at CLI.Decompiler.ProcessFile(String path, Stream stream, String originalPath, IFileLoader fileLoader) in /_/CLI/Decompiler.cs:line 656
+
+---------------
+File: C:\Users\Administrator\AppData\Local\Temp\opencode\facefix\invoker_head_invoker_head.dmx
+Exception: ValveResourceFormat.Utils.UnexpectedMagicException: Unexpected header. You likely tried to read a file that is not actually a resource (usually ends in '_c'). for variable 'HeaderVersion': 25632 (0x6420)
+   at ValveResourceFormat.Resource.Read(Stream input, Boolean verifyFileSize, Boolean leaveOpen) in /_/ValveResourceFormat/Resource/Resource.cs:line 199
+   at CLI.Decompiler.ProcessFile(String path, Stream stream, String originalPath, IFileLoader fileLoader) in /_/CLI/Decompiler.cs:line 656
+

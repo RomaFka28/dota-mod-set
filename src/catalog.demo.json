@@ -1,0 +1,11 @@
+[
+  {"id":"demo-juggernaut-oni","name":"Oni Blade — Juggernaut","hero":"Juggernaut","category":"hero-skins","replaces":"Модель и материалы Juggernaut","conflictKeys":["hero:juggernaut:model"],"size":"18.4 MB","tags":["герой","модель"],"source":"Демо-каталог"},
+  {"id":"demo-juggernaut-mask","name":"Crimson Mask — Juggernaut","hero":"Juggernaut","category":"items","replaces":"Слот маски Juggernaut","conflictKeys":["hero:juggernaut:mask"],"size":"4.2 MB","tags":["предмет","маска"],"source":"Демо-каталог"},
+  {"id":"demo-pudge-arcana","name":"Rotbound Pudge","hero":"Pudge","category":"hero-skins","replaces":"Модель и материалы Pudge","conflictKeys":["hero:pudge:model"],"size":"22.7 MB","tags":["герой","модель"],"source":"Демо-каталог"},
+  {"id":"demo-pudge-hook","name":"Abyss Hook","hero":"Pudge","category":"items","replaces":"Слот оружия Pudge","conflictKeys":["hero:pudge:weapon"],"size":"5.1 MB","tags":["предмет","оружие"],"source":"Демо-каталог"},
+  {"id":"demo-crystal-maiden-persona","name":"Frostbound Persona","hero":"Crystal Maiden","category":"personas","replaces":"Облик личности Crystal Maiden","conflictKeys":["hero:crystal_maiden:persona"],"size":"31.2 MB","tags":["личность","герой"],"source":"Демо-каталог"},
+  {"id":"demo-ward-verdant","name":"Verdant Observer Ward","hero":"Общее","category":"wards","replaces":"Модель Observer Ward","conflictKeys":["global:observer_ward:model"],"size":"1.8 MB","tags":["вард"],"source":"Демо-каталог"},
+  {"id":"demo-courier-ember","name":"Ember Courier","hero":"Общее","category":"couriers","replaces":"Модель курьера","conflictKeys":["global:courier:model"],"size":"6.3 MB","tags":["курьер"],"source":"Демо-каталог"},
+  {"id":"demo-terrain-aurora","name":"Aurora Terrain","hero":"Общее","category":"textures","replaces":"Текстуры ландшафта","conflictKeys":["global:terrain:textures"],"size":"42.0 MB","tags":["текстуры","ландшафт"],"source":"Демо-каталог"},
+  {"id":"demo-spell-prismatic","name":"Prismatic Spell FX","hero":"Общее","category":"effects","replaces":"Общие эффекты способностей","conflictKeys":["global:spells:effects"],"size":"12.9 MB","tags":["эффекты","способности"],"source":"Демо-каталог"}
+]

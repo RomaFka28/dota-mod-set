@@ -1,0 +1,32 @@
+{
+  "name": "dota-mod-set",
+  "version": "0.1.0",
+  "description": "Safe local Dota 2 cosmetic mod set manager",
+  "main": "src/main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win portable",
+    "dist:setup": "electron-builder --win nsis",
+    "test": "node src/recolor.test.js && node src/preflight.test.js && node src/dedup.test.js && node src/build.test.js && node src/grouping.test.js && node src/helpflags.test.js && node src/wave2.test.js && node src/subslot.test.js",
+    "check": "node --check src/main.js && node --check src/preload.js && node --check src/renderer.js && node --check src/workshop.js && node --check src/recolor.test.js && node --check src/preflight.test.js && node --check src/dedup.test.js && node --check src/build.test.js && node --check src/grouping.test.js && node --check src/helpflags.test.js && node --check src/wave2.test.js && node --check src/subslot.test.js"
+  },
+  "devDependencies": {
+    "electron": "^37.10.3",
+    "electron-builder": "^26.15.3"
+  },
+  "allowScripts": {
+    "electron@37.10.3": true
+  },
+  "build": {
+    "appId": "com.dotamodset.app",
+    "productName": "Dota Mod Set",
+    "directories": { "output": "dist" },
+    "files": ["src/**/*", "package.json", "!src/*.test.js"],
+    "win": {
+      "target": ["portable"]
+    },
+    "portable": { "artifactName": "DotaModSet-${version}-portable.exe" },
+    "nsis": { "oneClick": false, "perMachine": false }
+  }
+}
