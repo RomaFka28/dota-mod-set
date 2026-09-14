@@ -213,7 +213,7 @@ async function apply() {
       ? `В набор ${manifest.id} добавлено ${manifest.addedFiles.length} VPK. Старые файлы сохранены, базовый pak01 не изменён.`
       : `Создан изолированный набор ${manifest.id}. Файлы скопированы, базовый pak01 не изменён. Статус: ${manifest.state}.`;
     $('#resultPath').textContent = manifest.target;
-    $('#resultFiles').innerHTML = manifest.files.map(f => `<li>${escapeHtml(f.modName)} → ${escapeHtml(f.file.split(/[\\/]/).pop())}</li>`).join('');
+    renderResultFiles(manifest);
     $('#resultOpenFolder').onclick = () => window.mods.openFolder(manifest.target).catch(e => toast(e.message, true));
     $('#resultHistory').onclick = () => { $('#resultDialog').close(); showHistory(); };
     const installBtn = $('#resultInstall');
@@ -225,6 +225,30 @@ async function apply() {
     render();
   } catch (error) { playChime('err'); toast(error.message || 'Не удалось применить набор', true); button.innerHTML = original; button.disabled = false; return; }
   button.innerHTML = original; render();
+}
+function renderResultFiles(manifest) {
+  const groups = [...new Map(manifest.files.filter(file => file.modId).map(file => [file.modId, file.modName || file.modId])).entries()];
+  $('#resultFiles').innerHTML = groups.map(([id, name]) =>
+    `<li><span>${escapeHtml(name)}</span>${groups.length > 1 ? `<button type="button" class="remove-result-mod" data-result-set="${escapeHtml(manifest.id)}" data-result-mod="${escapeHtml(id)}">Удалить</button>` : ''}</li>`
+  ).join('');
+  document.querySelectorAll('[data-result-set]').forEach(button => button.onclick = async () => {
+    if (!await confirmStyled(`Удалить «${button.parentElement.querySelector('span').textContent}» из этого набора?`, { title: 'Удалить мод', okText: 'Удалить' })) return;
+    button.disabled = true;
+    try {
+      const result = await window.mods.removeMod({ setId: button.dataset.resultSet, modId: button.dataset.resultMod });
+      state.manifests = state.manifests.map(item => item.id === result.set.id ? result.set : item);
+      renderResultFiles(result.set);
+      $('#resultTitle').textContent = `Набор изменён: ${result.set.files.length} VPK`;
+      $('#resultMessage').textContent = result.wasInstalled
+        ? 'Мод удалён из набора и из игры. Установите обновлённый набор снова.'
+        : 'Мод удалён из набора. Остальные VPK сохранены.';
+      const installBtn = $('#resultInstall');
+      installBtn.disabled = false;
+      installBtn.textContent = 'Установить в игру →';
+      await refreshInstalled();
+      render();
+    } catch (error) { toast(error.message, true); button.disabled = false; }
+  });
 }
 // Установка применённого набора в папку озвучки игры (кнопка в диалоге результата).
 // Префлайт Steam/Dota — на стороне main, отказ приходит понятной ошибкой.
@@ -327,11 +351,7 @@ async function showHistory() {
       ? `<span class="history-actions"><button class="install-game" disabled title="Этот набор уже находится в игре">Уже в игре ✓</button><button class="clear-set" data-clear-set="${escapeHtml(set.id)}">Убрать из игры</button></span>`
       : `<span class="history-actions"><button class="install-game" data-install="${escapeHtml(set.id)}">Установить в игру</button><button class="rollback" data-rollback="${escapeHtml(set.id)}">Удалить набор</button></span>`;
     const status = active ? 'в игре' : set.state === 'applied' ? 'готов' : set.state;
-    const modGroups = [...new Map(set.files.filter(file => file.modId).map(file => [file.modId, file.modName || file.modId])).entries()];
-    const mods = set.state === 'applied' && modGroups.length > 1
-      ? `<div class="set-mod-list"><span>Моды в наборе:</span>${modGroups.map(([id, name]) => `<button class="remove-set-mod" data-remove-set="${escapeHtml(set.id)}" data-remove-mod="${escapeHtml(id)}">Удалить ${escapeHtml(name)}</button>`).join('')}</div>`
-      : '';
-    return `<article class="history-item"><div class="history-row"><div><div class="history-name">${escapeHtml(set.id)}</div><div class="history-meta">${new Date(set.createdAt).toLocaleString('ru-RU')} · ${set.files.length} VPK · ${escapeHtml(status)}</div></div>${actions}</div>${mods}</article>`;
+    return `<article class="history-item"><div class="history-row"><div><div class="history-name">${escapeHtml(set.id)}</div><div class="history-meta">${new Date(set.createdAt).toLocaleString('ru-RU')} · ${set.files.length} VPK · ${escapeHtml(status)}</div></div>${actions}</div></article>`;
   }).join('') : '<div class="empty">Наборов в истории ещё нет.</div>';
   document.querySelectorAll('[data-rollback]').forEach(button => button.onclick = async () => {
     if (!await confirmStyled('Удалить подготовленный набор и его запись из истории? После этого его нужно будет собрать заново.', { title: 'Удалить набор', okText: 'Удалить' })) return;
@@ -340,19 +360,6 @@ async function showHistory() {
   document.querySelectorAll('[data-clear-set]').forEach(button => button.onclick = async () => {
     if (!await confirmStyled('Убрать активные VPK этого набора из игры? Сам набор останется в истории и его можно будет установить снова.', { title: 'Убрать из игры', okText: 'Убрать', danger: false })) return;
     try { const res = await window.mods.clearGame(); toast(res.removed ? `Активные моды убраны из игры (файлов: ${res.removed})` : 'В игре уже нет наших модов'); await refreshInstalled(); render(); showHistory(); } catch (error) { toast(error.message, true); }
-  });
-  document.querySelectorAll('[data-remove-set]').forEach(button => button.onclick = async () => {
-    const name = button.textContent.replace(/^Удалить\s+/, '');
-    if (!await confirmStyled(`Удалить «${name}» только из этого набора? Остальные моды останутся.`, { title: 'Удалить мод из набора', okText: 'Удалить' })) return;
-    button.disabled = true;
-    try {
-      const result = await window.mods.removeMod({ setId: button.dataset.removeSet, modId: button.dataset.removeMod });
-      if (state.lastSetId === button.dataset.removeSet) state.lastSetId = button.dataset.removeSet;
-      await refreshInstalled();
-      render();
-      toast(result.wasInstalled ? `Мод удалён. Набор нужно снова установить в игру (осталось VPK: ${result.set.files.length})` : `Мод удалён из набора (файлов: ${result.removed})`);
-      showHistory();
-    } catch (error) { toast(error.message, true); button.disabled = false; }
   });
   document.querySelectorAll('[data-install]').forEach(button => button.onclick = async () => { button.disabled = true; try { const res = await window.mods.installGame(button.dataset.install); playChime('ok'); toast(`Моды в игре: ${res.files.map(f => f.name).join(', ')}`); await refreshInstalled(); render(); showHistory(); } catch (error) { playChime('err'); toast(error.message, true); } finally { button.disabled = false; } });
   $('#historyPurge').onclick = async () => { if (!await confirmStyled('Удалить из истории все удалённые и оборванные наборы? Готовые наборы не тронутся.', { title: 'Очистить историю', okText: 'Очистить' })) return; try { const res = await window.mods.purgeHistory(); playChime('ok'); toast(res.removed ? `История очищена: записей ${res.removed}` : 'История уже чиста'); showHistory(); } catch (error) { toast(error.message, true); } };
