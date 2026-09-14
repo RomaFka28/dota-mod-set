@@ -327,7 +327,11 @@ async function showHistory() {
       ? `<span class="history-actions"><button class="install-game" disabled title="Этот набор уже находится в игре">Уже в игре ✓</button><button class="clear-set" data-clear-set="${escapeHtml(set.id)}">Убрать из игры</button></span>`
       : `<span class="history-actions"><button class="install-game" data-install="${escapeHtml(set.id)}">Установить в игру</button><button class="rollback" data-rollback="${escapeHtml(set.id)}">Удалить набор</button></span>`;
     const status = active ? 'в игре' : set.state === 'applied' ? 'готов' : set.state;
-    return `<article class="history-item"><div class="history-row"><div><div class="history-name">${escapeHtml(set.id)}</div><div class="history-meta">${new Date(set.createdAt).toLocaleString('ru-RU')} · ${set.files.length} VPK · ${escapeHtml(status)}</div></div>${actions}</div></article>`;
+    const modGroups = [...new Map(set.files.filter(file => file.modId).map(file => [file.modId, file.modName || file.modId])).entries()];
+    const mods = set.state === 'applied' && modGroups.length > 1
+      ? `<div class="set-mod-list"><span>Моды в наборе:</span>${modGroups.map(([id, name]) => `<button class="remove-set-mod" data-remove-set="${escapeHtml(set.id)}" data-remove-mod="${escapeHtml(id)}">Удалить ${escapeHtml(name)}</button>`).join('')}</div>`
+      : '';
+    return `<article class="history-item"><div class="history-row"><div><div class="history-name">${escapeHtml(set.id)}</div><div class="history-meta">${new Date(set.createdAt).toLocaleString('ru-RU')} · ${set.files.length} VPK · ${escapeHtml(status)}</div></div>${actions}</div>${mods}</article>`;
   }).join('') : '<div class="empty">Наборов в истории ещё нет.</div>';
   document.querySelectorAll('[data-rollback]').forEach(button => button.onclick = async () => {
     if (!await confirmStyled('Удалить подготовленный набор и его запись из истории? После этого его нужно будет собрать заново.', { title: 'Удалить набор', okText: 'Удалить' })) return;
@@ -336,6 +340,19 @@ async function showHistory() {
   document.querySelectorAll('[data-clear-set]').forEach(button => button.onclick = async () => {
     if (!await confirmStyled('Убрать активные VPK этого набора из игры? Сам набор останется в истории и его можно будет установить снова.', { title: 'Убрать из игры', okText: 'Убрать', danger: false })) return;
     try { const res = await window.mods.clearGame(); toast(res.removed ? `Активные моды убраны из игры (файлов: ${res.removed})` : 'В игре уже нет наших модов'); await refreshInstalled(); render(); showHistory(); } catch (error) { toast(error.message, true); }
+  });
+  document.querySelectorAll('[data-remove-set]').forEach(button => button.onclick = async () => {
+    const name = button.textContent.replace(/^Удалить\s+/, '');
+    if (!await confirmStyled(`Удалить «${name}» только из этого набора? Остальные моды останутся.`, { title: 'Удалить мод из набора', okText: 'Удалить' })) return;
+    button.disabled = true;
+    try {
+      const result = await window.mods.removeMod({ setId: button.dataset.removeSet, modId: button.dataset.removeMod });
+      if (state.lastSetId === button.dataset.removeSet) state.lastSetId = button.dataset.removeSet;
+      await refreshInstalled();
+      render();
+      toast(result.wasInstalled ? `Мод удалён. Набор нужно снова установить в игру (осталось VPK: ${result.set.files.length})` : `Мод удалён из набора (файлов: ${result.removed})`);
+      showHistory();
+    } catch (error) { toast(error.message, true); button.disabled = false; }
   });
   document.querySelectorAll('[data-install]').forEach(button => button.onclick = async () => { button.disabled = true; try { const res = await window.mods.installGame(button.dataset.install); playChime('ok'); toast(`Моды в игре: ${res.files.map(f => f.name).join(', ')}`); await refreshInstalled(); render(); showHistory(); } catch (error) { playChime('err'); toast(error.message, true); } finally { button.disabled = false; } });
   $('#historyPurge').onclick = async () => { if (!await confirmStyled('Удалить из истории все удалённые и оборванные наборы? Готовые наборы не тронутся.', { title: 'Очистить историю', okText: 'Очистить' })) return; try { const res = await window.mods.purgeHistory(); playChime('ok'); toast(res.removed ? `История очищена: записей ${res.removed}` : 'История уже чиста'); showHistory(); } catch (error) { toast(error.message, true); } };
