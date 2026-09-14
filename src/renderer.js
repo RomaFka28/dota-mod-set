@@ -30,8 +30,7 @@ const CATEGORIES = [
   ['other', '○', 'Прочее'],
   ['hero-skins', '◉', 'Скины героев (прочие)'],
 ];
-const savedFavorites = (() => { try { return JSON.parse(localStorage.getItem('dota-mod-set:favorites') || '[]'); } catch { return []; } })();
-const state = { mods: [], cart: [], category: 'all', hero: 'all', query: '', availability: 'all', favoritesOnly: false, favorites: new Set(savedFavorites), settings: null, manifests: [], activeSetId: null, cached: new Set(), installed: new Set(), catalogMode: 'demo' };
+const state = { mods: [], cart: [], category: 'all', hero: 'all', query: '', availability: 'all', settings: null, manifests: [], activeSetId: null, cached: new Set(), installed: new Set(), catalogMode: 'demo' };
 const $ = selector => document.querySelector(selector);
 const escapeHtml = text => String(text ?? '').replace(/[&<>'"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;' }[c]));
 const initials = value => String(value || 'D').split(/[\s-]+/).map(x => x[0]).join('').slice(0, 2).toUpperCase();
@@ -109,13 +108,13 @@ function filteredMods() {
   return state.mods.filter(mod => {
     const matchesScope = (state.category === 'all' || mod.category === state.category) && (state.hero === 'all' || mod.hero === state.hero);
     const matchesText = !query || [mod.name, mod.hero, mod.replaces, ...(mod.tags || [])].join(' ').toLowerCase().includes(query);
-    return matchesScope && matchesText && matchesAvailability(mod) && (!state.favoritesOnly || state.favorites.has(mod.id));
+    return matchesScope && matchesText && matchesAvailability(mod);
   });
 }
 function renderCatalog() {
   const list = filteredMods(); const conflicts = new Set(conflictMap().flatMap(([, mods]) => mods.map(m => m.id))); const selected = new Set(state.cart.map(m => m.id));
   $('#catalogTitle').textContent = state.hero !== 'all' ? state.hero : categoryName(state.category); $('#catalogDescription').textContent = `${list.length} ${list.length === 1 ? 'мод' : 'модов'} · на карточке указан заменяемый элемент`;
-  $('#modGrid').innerHTML = list.map(mod => { const status = modStatus(mod); const statusBadge = conflicts.has(mod.id) ? '<span class="status conflict">КОНФЛИКТ</span>' : status === 'ready' ? '<span class="status ready">ГОТОВО</span>' : status === 'demo' ? '<span class="status download">ДЕМО</span>' : ''; const inCart = selected.has(mod.id); const favorite = state.favorites.has(mod.id); const hasImage = Boolean(mod.previewUrl);   const image = hasImage ? `<img class="preview-image" src="${escapeHtml(mod.previewUrl)}" alt="" loading="lazy" decoding="async" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'">` : ''; return `<article class="mod-card ${inCart ? 'selected' : ''} ${conflicts.has(mod.id) ? 'conflict' : ''}" data-mid="${escapeHtml(mod.id)}"><div class="preview-wrap">${image}<div class="avatar ${mod.hero === 'Общее' ? 'global' : ''}" style="${hasImage ? 'display:none' : ''}">${initials(mod.hero)}</div></div><div class="card-body"><div class="card-top"><span class="status-favorite ${favorite ? 'active' : ''}" data-favorite="${escapeHtml(mod.id)}" title="${favorite ? 'Убрать из избранного' : 'Добавить в избранное'}">${favorite ? '★' : '☆'}</span>${statusBadge}${state.installed.has(mod.id) ? '<span class="status ingame">В ИГРЕ ✓</span>' : ''}</div><div class="card-title">${escapeHtml(mod.name)}</div><div class="card-hero">${escapeHtml(mod.hero)} · ${escapeHtml(categoryName(mod.category))}</div><div class="card-replaces">Заменяет: ${escapeHtml(mod.replaces)}</div><div class="card-footer">${mod.size && mod.size !== '—' ? `<span class="counter">${escapeHtml(mod.size)}</span>` : ''}<div class="card-actions">${status === 'download' ? `<button class="download-button" data-download="${escapeHtml(mod.id)}">Скачать</button>` : ''}${mod.source === 'Мастерская' && !state.installed.has(mod.id) ? `<button class="delete-button" data-delws="${escapeHtml(mod.id)}" title="Удалить сборку (VPK, кэш, карточка)">🗑</button>` : (status === 'ready' && !state.installed.has(mod.id)) ? `<button class="delete-button" data-delcache="${escapeHtml(mod.id)}" title="Удалить скачанный файл из кэша">🗑</button>` : ''}<button class="add-button" data-mod="${escapeHtml(mod.id)}"${state.installed.has(mod.id) && !inCart ? ' disabled title="Уже установлен в игре"' : ''}>${inCart ? 'Убрать' : state.installed.has(mod.id) ? 'В игре ✓' : 'В набор'}</button></div></div></div></article>`; }).join('');
+  $('#modGrid').innerHTML = list.map(mod => { const status = modStatus(mod); const statusBadge = conflicts.has(mod.id) ? '<span class="status conflict">КОНФЛИКТ</span>' : status === 'ready' ? '<span class="status ready">ГОТОВО</span>' : status === 'demo' ? '<span class="status download">ДЕМО</span>' : ''; const inCart = selected.has(mod.id); const hasImage = Boolean(mod.previewUrl);   const image = hasImage ? `<img class="preview-image" src="${escapeHtml(mod.previewUrl)}" alt="" loading="lazy" decoding="async" onerror="this.style.display='none';this.nextElementSibling.style.display='grid'">` : ''; return `<article class="mod-card ${inCart ? 'selected' : ''} ${conflicts.has(mod.id) ? 'conflict' : ''}" data-mid="${escapeHtml(mod.id)}"><div class="preview-wrap">${image}<div class="avatar ${mod.hero === 'Общее' ? 'global' : ''}" style="${hasImage ? 'display:none' : ''}">${initials(mod.hero)}</div></div><div class="card-body"><div class="card-top">${statusBadge}${state.installed.has(mod.id) ? '<span class="status ingame">В ИГРЕ ✓</span>' : ''}</div><div class="card-title">${escapeHtml(mod.name)}</div><div class="card-hero">${escapeHtml(mod.hero)} · ${escapeHtml(categoryName(mod.category))}</div><div class="card-replaces">Заменяет: ${escapeHtml(mod.replaces)}</div><div class="card-footer">${mod.size && mod.size !== '—' ? `<span class="counter">${escapeHtml(mod.size)}</span>` : ''}<div class="card-actions">${status === 'download' ? `<button class="download-button" data-download="${escapeHtml(mod.id)}">Скачать</button>` : ''}${mod.source === 'Мастерская' && !state.installed.has(mod.id) ? `<button class="delete-button" data-delws="${escapeHtml(mod.id)}" title="Удалить сборку (VPK, кэш, карточка)">🗑</button>` : (status === 'ready' && !state.installed.has(mod.id)) ? `<button class="delete-button" data-delcache="${escapeHtml(mod.id)}" title="Удалить скачанный файл из кэша">🗑</button>` : ''}<button class="add-button" data-mod="${escapeHtml(mod.id)}"${state.installed.has(mod.id) && !inCart ? ' disabled title="Уже установлен в игре"' : ''}>${inCart ? 'Убрать' : state.installed.has(mod.id) ? 'В игре ✓' : 'В набор'}</button></div></div></div></article>`; }).join('');
   $('#emptyState').classList.toggle('hidden', list.length > 0);
 }
 async function deleteCachedMod(id) {
@@ -372,14 +371,6 @@ function openModDetail(id) {
   if (!dlg.open) dlg.showModal();
 }
 $('#modGrid').addEventListener('click', e => {
-  const favorite = e.target.closest('[data-favorite]');
-  if (favorite) {
-    const id = favorite.dataset.favorite;
-    state.favorites.has(id) ? state.favorites.delete(id) : state.favorites.add(id);
-    try { localStorage.setItem('dota-mod-set:favorites', JSON.stringify([...state.favorites])); } catch {}
-    renderCatalog();
-    return;
-  }
   const button = e.target.closest('button');
   if (button) {
     if (button.dataset.mod) return toggleCart(button.dataset.mod);
@@ -436,7 +427,6 @@ document.getElementById('confirmDialog').addEventListener('click', e => { if (e.
 document.getElementById('confirmDialog').addEventListener('close', () => { if (__confirmResolve) { const r = __confirmResolve; __confirmResolve = null; r(false); } });
 $('#searchInput').oninput = event => { state.query = event.target.value; renderCatalog(); };
 document.querySelectorAll('[data-availability]').forEach(button => button.onclick = () => { state.availability = button.dataset.availability; document.querySelectorAll('[data-availability]').forEach(item => item.classList.toggle('active', item === button)); render(); });
-$('#favoritesFilter').onclick = () => { state.favoritesOnly = !state.favoritesOnly; $('#favoritesFilter').classList.toggle('active', state.favoritesOnly); render(); };
 $('#clearCart').onclick = async () => { if (!state.cart.length) return; if (!await confirmStyled('Очистить корзину? Набранные моды придётся добавлять заново.', { title: 'Очистить корзину', okText: 'Очистить', danger: false })) return; state.cart = []; render(); }; $('#applyButton').onclick = apply; $('#settingsButton').onclick = openSettings; $('#historyButton').onclick = showHistory; $('#refreshCatalog').onclick = refreshCatalog; $('#sourceButton').onclick = () => window.mods.openSource(); $('#appRepositoryButton').onclick = () => window.mods.openAppRepository();
 $('#gamePathInput').addEventListener('keydown', e => {
   // form method=dialog: Enter в поле пути молча закрывал настройки без

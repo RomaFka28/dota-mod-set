@@ -16,7 +16,6 @@
 /* ── Card body ──────────────────────────────── */
 .card-body{padding:11px 14px 13px;display:flex;flex-direction:column;flex:1}
 .card-top{display:flex;justify-content:flex-end;margin-bottom:7px}
-.status-favorite{margin-right:auto;color:#64768d;font-size:18px;line-height:1;cursor:pointer}.status-favorite:hover,.status-favorite.active{color:#f6b85a}
 .card-title{font-size:13px;font-weight:700;line-height:1.3;margin:0 0 3px}
 .card-hero{font-size:11px;color:#94a6bd}
 .card-replaces{font-size:11px;color:#c1ccd8;margin:9px 0;flex:1;line-height:1.4}
