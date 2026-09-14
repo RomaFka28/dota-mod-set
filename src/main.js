@@ -6,10 +6,12 @@ const path = require('node:path');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const { validateArchiveEntries } = require('./archive-safety');
+const { CATALOG_SOURCES } = require('./catalog-sources');
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_GAME_PATH = 'D:\\SteamLibrary\\steamapps\\common\\dota 2 beta';
-const SOURCE_ROOT = 'https://github.com/h6rd/Dota2PornFxWeb';
+const D2PFX_SOURCE = CATALOG_SOURCES[0];
+const SOURCE_ROOT = D2PFX_SOURCE.repositoryUrl;
 const APP_REPOSITORY = 'https://github.com/RomaFka28/dota-mod-set';
 const SAFE_DOWNLOAD_HOSTS = new Set(['github.com', 'raw.githubusercontent.com', 'objects.githubusercontent.com', 'h6rd.github.io']);
 const dataPath = () => path.join(app.getPath('userData'), 'DotaModSet');
@@ -172,7 +174,11 @@ function normalizeMod(raw, index) {
     replaces: raw.replaces || raw.description || raw.target || 'Описание замены отсутствует в источнике',
     conflictKeys: Array.isArray(raw.conflictKeys) ? raw.conflictKeys : (raw.conflictKey ? [raw.conflictKey] : []),
     size: raw.size || raw.fileSize || null, tags: raw.tags || [], previewUrl: raw.previewUrl || raw.preview_url || null, downloadUrl: typeof link === 'string' && /^https:\/\//.test(link) ? link : null,
-    source: 'D2PFX'
+    source: raw.source || 'D2PFX',
+    sourceId: raw.sourceId || raw.id || null,
+    sourceRepository: raw.sourceRepository || SOURCE_ROOT,
+    author: raw.author || null,
+    license: raw.license || null,
   };
 }
 function inferHeroFromName(name, heroNames = []) {
@@ -277,7 +283,7 @@ function flattenD2PfxData(payload, heroNames = []) {
 async function catalogFromSource() {
   try {
     const [modsResponse, constantsResponse] = await Promise.all([
-      fetch('https://raw.githubusercontent.com/h6rd/Dota2PornFxWeb/main/assets/data/mods.json', { signal: AbortSignal.timeout(10000), headers: { Accept: 'application/json' } }),
+      fetch(D2PFX_SOURCE.catalogUrl, { signal: AbortSignal.timeout(10000), headers: { Accept: 'application/json' } }),
       fetch('https://raw.githubusercontent.com/h6rd/Dota2PornFxWeb/main/assets/data/constants.json', { signal: AbortSignal.timeout(10000), headers: { Accept: 'application/json' } })
     ]);
     if (modsResponse.ok) {
