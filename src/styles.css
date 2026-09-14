@@ -196,19 +196,17 @@ input,textarea,select,[contenteditable="true"]{
 .brand{position:absolute;left:50%;transform:translateX(-50%);white-space:nowrap}
 .top-actions{position:absolute;left:18px;top:0;height:62px;padding-right:0}
 .source-button{padding:8px 5px}
-.top-catalog-status{display:inline-flex;align-items:center;gap:6px;margin-left:8px;color:#8190a5;font-size:11px;white-space:nowrap}
+.top-catalog-status{display:inline-flex;align-items:center;gap:6px;margin-left:8px;color:#8190a5;font-size:11px;white-space:nowrap;padding:8px 5px}
 .top-catalog-status .dot{margin:0}
+.app-repository-button{color:#9fb2c8}
 .sidebar-foot{
   display:none;
 }
 .sidebar{padding-bottom:25px}
-/* Keep every scrollbar dark; hide native arrow buttons and the white corner. */
-*{scrollbar-color:#45617f transparent;scrollbar-width:thin}
-*::-webkit-scrollbar{width:8px;height:8px;background:transparent}
-*::-webkit-scrollbar-track,*::-webkit-scrollbar-track-piece{background:transparent}
-*::-webkit-scrollbar-thumb{background:#45617f;border:2px solid transparent;background-clip:padding-box;border-radius:8px}
-*::-webkit-scrollbar-thumb:hover{background:#6084aa;background-clip:padding-box}
-*::-webkit-scrollbar-button{display:none;width:0;height:0}
-*::-webkit-scrollbar-corner{background:transparent}
+/* Hide native scrollbar chrome entirely while preserving wheel and touch scrolling. */
+*{scrollbar-width:none;-ms-overflow-style:none}
+*::-webkit-scrollbar{display:none;width:0;height:0;background:transparent}
+*::-webkit-scrollbar-track,*::-webkit-scrollbar-track-piece,*::-webkit-scrollbar-thumb,
+*::-webkit-scrollbar-button,*::-webkit-scrollbar-corner{display:none;background:transparent;border:0}
 @media(max-width:1160px){.topbar{padding-left:25px;padding-right:150px}}
 @media(max-width:900px){.topbar{padding-left:25px;padding-right:150px}.brand{left:50%;font-size:12px}.brand .pill{display:none}}

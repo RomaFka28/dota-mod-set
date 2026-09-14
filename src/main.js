@@ -10,6 +10,7 @@ const { validateArchiveEntries } = require('./archive-safety');
 const execFileAsync = promisify(execFile);
 const DEFAULT_GAME_PATH = 'D:\\SteamLibrary\\steamapps\\common\\dota 2 beta';
 const SOURCE_ROOT = 'https://github.com/h6rd/Dota2PornFxWeb';
+const APP_REPOSITORY = 'https://github.com/RomaFka28/dota-mod-set';
 const SAFE_DOWNLOAD_HOSTS = new Set(['github.com', 'raw.githubusercontent.com', 'objects.githubusercontent.com', 'h6rd.github.io']);
 const dataPath = () => path.join(app.getPath('userData'), 'DotaModSet');
 const configPath = () => path.join(dataPath(), 'config.json');
@@ -2190,6 +2191,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('dialog:game-folder', async () => { const result = await dialog.showOpenDialog({ properties: ['openDirectory'] }); return result.canceled ? null : result.filePaths[0]; });
   ipcMain.handle('set:open-folder', async (_, folder) => { const dir = String(folder || ''); if (!dir) throw new Error('Нет пути для открытия'); await shell.openPath(dir); return true; });
   ipcMain.handle('source:open', () => shell.openExternal(SOURCE_ROOT));
+  ipcMain.handle('app-repository:open', () => shell.openExternal(APP_REPOSITORY));
   // Workshop IPC
   ipcMain.handle('workshop:tool-status', async (_, gamePath) => workshopToolStatus(gamePath));
   const SAFE_OPEN_HOSTS = new Set(['store.steampowered.com', 'steamcommunity.com', 'dotnet.microsoft.com', 'github.com']);
