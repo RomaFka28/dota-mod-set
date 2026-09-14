@@ -869,54 +869,6 @@ async function rollback(setId) {
     } else if (set.hasFonts) {
       await restoreDefaultFonts(resolvedGame);
     }
-    async function removeModFromSet({ setId, modId }) {
-      if (!setId || !modId) throw new Error('Не выбран мод для удаления');
-      const rec = await readJson(installRecordPath(), null);
-      const isInstalled = Boolean(rec && rec.setId === setId);
-      const apps = isInstalled ? await ensureAppsClosed(null).catch(() => ({ steamWasRunning: false })) : { steamWasRunning: false };
-      try {
-        return await withCatalogLock(async () => {
-          const manifests = await readJson(manifestPath(), []);
-          const set = manifests.find(item => item.id === setId && item.state === 'applied');
-          if (!set) throw new Error('Набор не найден или уже удалён');
-          if (!isSubpath(set.target, gameModRoot(path.resolve(set.gamePath)))) throw new Error('Папка набора находится вне защищённой папки приложения');
-          const removed = set.files.filter(file => String(file.modId) === String(modId));
-          if (!removed.length) throw new Error('Этот мод не найден в наборе');
-          if (removed.length === set.files.length) throw new Error('Последний мод нельзя удалить отдельно — удалите весь набор');
-          for (const entry of set.files) {
-            if (!isSubpath(entry.file, set.target) || !fss.existsSync(entry.file)) throw new Error(`Файл набора пропал: ${path.basename(entry.file)}`);
-            if (await hashFile(entry.file) !== entry.sha256) throw new Error(`Файл набора изменён: ${path.basename(entry.file)}`);
-          }
-          if (isInstalled) await removeInstallRecord(set.gamePath);
-          const backup = path.join(dataPath(), `remove-${crypto.randomUUID()}`);
-          const moved = [];
-          await fs.mkdir(backup, { recursive: true });
-          try {
-            for (const entry of removed) {
-              const backupFile = path.join(backup, path.basename(entry.file));
-              await fs.rename(entry.file, backupFile);
-              moved.push({ entry, backupFile });
-            }
-            set.files = set.files.filter(file => String(file.modId) !== String(modId));
-            if (set.fontMod && String(set.fontMod.modId) === String(modId)) {
-              await fs.rm(path.join(path.dirname(set.target), 'font-assets'), { recursive: true, force: true });
-              set.hasFonts = false;
-              delete set.fontMod;
-            }
-            set.updatedAt = new Date().toISOString();
-            await writeJson(manifestPath(), manifests);
-            await fs.rm(backup, { recursive: true, force: true });
-            return { set, removed: removed.length, wasInstalled: isInstalled };
-          } catch (error) {
-            for (const item of moved) await fs.rename(item.backupFile, item.entry.file).catch(() => {});
-            throw error;
-          } finally { await fs.rm(backup, { recursive: true, force: true }).catch(() => {}); }
-        });
-      } finally {
-        if (apps.steamWasRunning) await relaunchSteam(null).catch(() => false);
-      }
-    }
-
     // Пофайлово и живуче: одна блокировка (Steam держит файл) больше не
     // абортит весь откат с потерей отчёта — копим failed, манифест сохраняем всегда.
     const skipped = []; const failed = [];
@@ -942,6 +894,53 @@ async function rollback(setId) {
     set.skipped = skipped; set.failed = failed;
     await writeJson(manifestPath(), manifests);
     return { set, skipped, failed };
+    });
+  } finally {
+    if (apps.steamWasRunning) await relaunchSteam(null).catch(() => false);
+  }
+}
+async function removeModFromSet({ setId, modId }) {
+  if (!setId || !modId) throw new Error('Не выбран мод для удаления');
+  const rec = await readJson(installRecordPath(), null);
+  const isInstalled = Boolean(rec && rec.setId === setId);
+  const apps = isInstalled ? await ensureAppsClosed(null).catch(() => ({ steamWasRunning: false })) : { steamWasRunning: false };
+  try {
+    return await withCatalogLock(async () => {
+      const manifests = await readJson(manifestPath(), []);
+      const set = manifests.find(item => item.id === setId && item.state === 'applied');
+      if (!set) throw new Error('Набор не найден или уже удалён');
+      const setGamePath = path.resolve(set.gamePath || (await settings()).gamePath);
+      if (!isSubpath(set.target, gameModRoot(setGamePath))) throw new Error('Папка набора находится вне защищённой папки приложения');
+      const removed = set.files.filter(file => String(file.modId) === String(modId));
+      if (!removed.length) throw new Error('Этот мод не найден в наборе');
+      if (removed.length === set.files.length) throw new Error('Последний мод нельзя удалить отдельно — удалите весь набор');
+      for (const entry of set.files) {
+        if (!isSubpath(entry.file, set.target) || !fss.existsSync(entry.file)) throw new Error(`Файл набора пропал: ${path.basename(entry.file)}`);
+        if (await hashFile(entry.file) !== entry.sha256) throw new Error(`Файл набора изменён: ${path.basename(entry.file)}`);
+      }
+      if (isInstalled) await removeInstallRecord(setGamePath);
+      const backup = path.join(dataPath(), `remove-${crypto.randomUUID()}`);
+      const moved = [];
+      await fs.mkdir(backup, { recursive: true });
+      try {
+        for (const entry of removed) {
+          const backupFile = path.join(backup, path.basename(entry.file));
+          await fs.rename(entry.file, backupFile);
+          moved.push({ entry, backupFile });
+        }
+        set.files = set.files.filter(file => String(file.modId) !== String(modId));
+        if (set.fontMod && String(set.fontMod.modId) === String(modId)) {
+          await fs.rm(path.join(path.dirname(set.target), 'font-assets'), { recursive: true, force: true });
+          set.hasFonts = false;
+          delete set.fontMod;
+        }
+        set.updatedAt = new Date().toISOString();
+        await writeJson(manifestPath(), manifests);
+        return { set, removed: removed.length, wasInstalled: isInstalled };
+      } catch (error) {
+        for (const item of moved) await fs.rename(item.backupFile, item.entry.file).catch(() => {});
+        throw error;
+      } finally { await fs.rm(backup, { recursive: true, force: true }).catch(() => {}); }
     });
   } finally {
     if (apps.steamWasRunning) await relaunchSteam(null).catch(() => false);

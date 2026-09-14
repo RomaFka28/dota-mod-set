@@ -30,7 +30,9 @@
 .add-button:disabled{opacity:.55;cursor:default}
 .download-button{background:#2a3b51;border-radius:7px;padding:6px 9px;font-weight:700;font-size:11px;color:#e8c87a}
 .download-button:hover{background:#6e5020;color:#ffe0a0}
-.delete-button{background:#3a2530;border-radius:7px;padding:6px 9px;font-weight:700;font-size:11px;color:#e08a9a}
+.delete-button,.remove-installed-button{background:#3a2530;border-radius:7px;padding:6px 9px;font-weight:700;font-size:11px;color:#e08a9a}
+.remove-installed-button{background:#493a25;color:#f0c58d}
+.delete-button:hover,.remove-installed-button:hover{background:#5c2430;color:#ffc0cb}
 .delete-button:hover{background:#5c2430;color:#ffc0cb}
 .ws-groupline{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid #26344a;border-radius:8px;margin:6px 0;cursor:pointer;background:#101825}
 .ws-groupline:hover{border-color:#3b5878}
